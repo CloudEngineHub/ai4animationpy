@@ -5,7 +5,7 @@ __version__ = "1.0.0"
 
 # Subpackages (import modules/packages, not classes yet to avoid circular imports)
 # Core utility modules (no dependencies on other package modules)
-from . import AI, Animation, Components, IK, Import, Math, Time, Utility
+from . import AI, Animation, Components, Core, IK, Import, Math, Time, Utility
 
 # AI modules
 from .AI import DataSampler, FeedTensor, Generators, Plotting, ReadTensor
@@ -23,6 +23,7 @@ from .AI.Optimizers.CosineAnnealingOptimizer import CosineAnnealingOptimizer
 
 # Core classes (imported after subpackages to avoid circular dependencies)
 from .AI4Animation import AI4Animation
+from .Animation.AudioModule import AudioModule
 from .Animation.ContactModule import ContactModule
 from .Animation.Dataset import Dataset
 from .Animation.GuidanceModule import GuidanceModule
@@ -45,8 +46,12 @@ from .Components.Component import Component
 from .Components.MeshRenderer import MeshRenderer
 from .Components.MotionEditor import MotionEditor
 
-# Core classes
-from .Core import Physics
+# Core
+from .Core import (
+    AudioPlayer,
+    Audio,
+    Physics,
+)
 from .Entity import Entity
 
 # IK classes
@@ -82,8 +87,11 @@ __all__ = [
     "IK",
     "Import",
     "Components",
+    "Core",
     # Core
     "Physics",
+    "AudioPlayer",
+    "Audio",
     # Animation
     "Motion",
     "Hierarchy",
@@ -94,6 +102,7 @@ __all__ = [
     "MirrorModule",
     "ContactModule",
     "GuidanceModule",
+    "AudioModule",
     "PID",
     "TrackingModule",
     # Components

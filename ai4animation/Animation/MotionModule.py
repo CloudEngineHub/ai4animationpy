@@ -38,12 +38,8 @@ class MotionModule(Module):
         noise: float = 0.0,
     ):
         timestamps = timeseries.SimulateTimestamps(timestamp)
-        # transforms = self.GetTransforms(
-        #     timestamps, mirrored, names, smoothing, power, noise
-        # )
-        transforms = Transform.TR(
-            self.GetPositions(timestamps, mirrored, names, smoothing, power, noise),
-            self.GetRotations(timestamps, mirrored, names, smoothing, power, noise),
+        transforms = self.GetTransforms(
+            timestamps, mirrored, names, smoothing, power, noise
         )
         velocities = self.GetVelocities(
             timestamps, mirrored, names, smoothing, power, noise

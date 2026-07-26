@@ -16,7 +16,7 @@ setup(
             "convert=ai4animation.Import.BatchConverter:main",
         ],
     },
-    python_requires="==3.12.13",
+    python_requires=">=3.12.12",
     install_requires=[
         "raylib==5.5",
         "numpy==1.26.4",
@@ -31,5 +31,7 @@ setup(
         "einops>=0.8.1",
         "tqdm",
         "pyyaml",
+        "sounddevice>=0.5.0",
+        "soundfile>=0.12.0",
     ],
 )

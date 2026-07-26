@@ -2,6 +2,7 @@
 import threading
 from enum import Enum
 
+import numpy as np
 from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Animation.Module import Module
@@ -9,6 +10,11 @@ from ai4animation.Animation.Motion import Motion
 from ai4animation.Animation.TimeSeries import TimeSeries
 from ai4animation.Math import Rotation, Tensor, Transform, Vector3
 
+MAX_WINDOW = 2.0
+MAX_NOISE = 0.025
+MIN_POWER = 0.0
+MAX_POWER = 1.0
+MAX_SHIFT = 0.5
 
 class RootModule(Module):
     class Topology(Enum):
@@ -67,12 +73,14 @@ class RootModule(Module):
         mirrored: bool,
         timeseries: TimeSeries,
         smoothing: TimeSeries = None,
+        power: float = 1.0,
+        noise: float = 0.0,
     ):
         timestamps = timeseries.SimulateTimestamps(timestamp)
         instance = self.Series(
             timeseries,
-            self.GetTransforms(timestamps, mirrored, smoothing),
-            self.GetVelocities(timestamps, mirrored, smoothing),
+            self.GetTransforms(timestamps, mirrored, smoothing, power=power, noise=noise),
+            self.GetVelocities(timestamps, mirrored, smoothing, power=power, noise=noise),
         )
         return instance
 
@@ -81,6 +89,8 @@ class RootModule(Module):
         timestamps,
         mirrored: bool,
         smoothing: TimeSeries = None,
+        power: float = 1.0,
+        noise: float = 0.0,
     ):
         if smoothing is not None and smoothing.Window > 0.0:
             timestamps = Tensor.Unsqueeze(timestamps, -1) + smoothing.Timestamps
@@ -92,10 +102,11 @@ class RootModule(Module):
             directions = Transform.GetAxisZ(matrices)
 
             center = positions[..., int((smoothing.SampleCount - 1) / 2), :]
+            bias = 2.0
             positions = (
                 Tensor.Gaussian(
                     positions - Tensor.Unsqueeze(center, axis),
-                    power=2.0,
+                    power=power * bias,
                     axis=axis,
                     keepDim=False,
                 )
@@ -107,14 +118,13 @@ class RootModule(Module):
                 directions[..., 1:, :],
                 Vector3.Create(0, 1, 0),
             ) / (timestamps[..., 1:] - timestamps[..., 0:-1])
-            power = Tensor.Deg2Rad(Tensor.Abs(Tensor.Sum(angles, -1)))
-            power = Tensor.Unsqueeze(power, -1)
+            bias = Tensor.Deg2Rad(Tensor.Abs(Tensor.Sum(angles, -1)))
+            bias = Tensor.Unsqueeze(bias, -1)
             directions = Tensor.Gaussian(
-                directions, power=power, axis=axis, keepDim=False
+                directions, power=power * bias, axis=axis, keepDim=False
             )
 
             matrices = Transform.TR(positions, Rotation.LookPlanar(directions))
-            return matrices
         else:
             with self.Lock:
                 if self.StandardMatrices is None:
@@ -125,16 +135,28 @@ class RootModule(Module):
             matrices = matrices[self.Motion.GetFrameIndices(timestamps)]
             if self.Motion.Scale != 1.0:
                 matrices = Transform.Scale(matrices, self.Motion.Scale)
-            return matrices
+        if noise > 0.0:
+            #Position
+            delta = noise * np.random.randn(*matrices[..., :3, 3].shape)
+            delta[..., 1] = 0.0
+            matrices[..., :3, 3] += delta
+            #Rotation
+            delta = Rotation.RotationY(
+                180*noise*Tensor.RandomUniform(matrices.shape[:-2])
+            )
+            matrices[..., :3, :3] = Rotation.RotationFrom(delta, matrices[..., :3, :3])
+        return matrices
 
     def GetPositions(
         self,
         timestamps,
         mirrored: bool,
         smoothing: TimeSeries = None,
+        power: float = 1.0,
+        noise: float = 0.0,
     ):
         return Transform.GetPosition(
-            self.GetTransforms(timestamps, mirrored, smoothing)
+            self.GetTransforms(timestamps, mirrored, smoothing, power=power, noise=noise)
         )
 
     def GetRotations(
@@ -142,9 +164,11 @@ class RootModule(Module):
         timestamps,
         mirrored: bool,
         smoothing: TimeSeries = None,
+        power: float = 1.0,
+        noise: float = 0.0,
     ):
         return Transform.GetRotation(
-            self.GetTransforms(timestamps, mirrored, smoothing)
+            self.GetTransforms(timestamps, mirrored, smoothing, power=power, noise=noise)
         )
 
     def GetVelocities(
@@ -152,6 +176,8 @@ class RootModule(Module):
         timestamps,
         mirrored: bool,
         smoothing: TimeSeries = None,
+        power: float = 1.0,
+        noise: float = 0.0,
     ):
         t_previous = Tensor.Clamp(
             timestamps - self.Motion.DeltaTime,
@@ -161,8 +187,8 @@ class RootModule(Module):
         t_current = Tensor.Clamp(
             timestamps, self.Motion.DeltaTime, self.Motion.TotalTime
         )
-        pos_previous = self.GetPositions(t_previous, mirrored, smoothing)
-        pos_current = self.GetPositions(t_current, mirrored, smoothing)
+        pos_previous = self.GetPositions(t_previous, mirrored, smoothing, power=power, noise=noise)
+        pos_current = self.GetPositions(t_current, mirrored, smoothing, power=power, noise=noise)
         return (pos_current - pos_previous) / self.Motion.DeltaTime
 
     def GetDeltaTransforms(
@@ -278,35 +304,86 @@ class RootModule(Module):
             editor.Actor.Root = self.GetTransforms(editor.Timestamp, editor.Mirror)
 
     def Standalone(self):
-        self.Button_Smooth = AI4Animation.GUI.Button(
-            "Smooth", 0.4, 0.2, 0.2, 0.05, False, True
+        x = 0.325
+        y = 0.165
+        w = 0.24
+        h = 0.04
+
+        y+=0
+        self.Slider_SmoothWindow = AI4Animation.GUI.Slider(
+            x, y, w/2, h, 0.0, 0.0, MAX_WINDOW, label="Smooth Window"
         )
-        self.Slider_Window = AI4Animation.GUI.Slider(
-            0.4, 0.25, 0.2, 0.05, 1.0, 0.0, 2.0, label="Window"
+        self.Slider_SmoothPower = AI4Animation.GUI.Slider(
+            x+w/2, y, w/2, h, 1.0, MIN_POWER, MAX_POWER, label="Smooth Power"
+        )
+        self.Button_SmoothRandomize = AI4Animation.GUI.Button(
+            "Random", x+w,y,0.1,h,False,True
+        )
+        y+=h
+        self.Slider_ShiftAmount = AI4Animation.GUI.Slider(
+            x, y, w, h, 0.0, 0.0, MAX_SHIFT, label="Shift Amount"
+        )
+        self.Button_ShiftRandomize = AI4Animation.GUI.Button(
+            "Random", x+w,y,0.1,h,False,True
+        )
+        y+=h
+        self.Slider_NoiseAmount = AI4Animation.GUI.Slider(
+            x, y, w, h, 0.0, 0.0, MAX_NOISE, label="Noise Amount"
+        )
+        self.Button_NoiseRandomize = AI4Animation.GUI.Button(
+            "Random", x+w,y,0.1,h,False,True
         )
 
     def GUI(self, editor):
         if Module.Visualize[RootModule]:
-            self.Button_Smooth.GUI()
-            self.Slider_Window.GUI()
+            self.Slider_SmoothWindow.GUI()
+            self.Slider_SmoothPower.GUI()
+            self.Button_SmoothRandomize.GUI()
+
+            self.Slider_ShiftAmount.GUI()
+            self.Button_ShiftRandomize.GUI()
+
+            self.Slider_NoiseAmount.GUI()
+            self.Button_NoiseRandomize.GUI()
 
     def Draw(self, editor):
         if Module.Visualize[RootModule]:
-            window = self.Slider_Window.GetValue()
+            if self.Button_SmoothRandomize.Active:
+                self.Slider_SmoothWindow.SetValue(
+                    Tensor.RandomUniform(min=0.0, max=MAX_WINDOW)
+                )
+                self.Slider_SmoothPower.SetValue(
+                    Tensor.RandomUniform(min=MIN_POWER, max=MAX_POWER)
+                )
+            if self.Button_ShiftRandomize.Active:
+                self.Slider_ShiftAmount.SetValue(
+                    Tensor.RandomUniform(min=0.0, max=MAX_SHIFT)
+                )
+            if self.Button_NoiseRandomize.Active:
+                self.Slider_NoiseAmount.SetValue(
+                    Tensor.RandomUniform(min=0.0, max=MAX_NOISE)
+                )
+
+            window = self.Slider_SmoothWindow.GetValue()
+            power = self.Slider_SmoothPower.GetValue()
             smoothing = (
                 TimeSeries(
                     -window / 2,
                     window / 2,
                     editor.TimeSeries.SampleCount,
                 )
-                if self.Button_Smooth.Active
+                if window > 0.0
                 else None
             )
+            shift = self.Slider_ShiftAmount.GetValue()
+            noise = self.Slider_NoiseAmount.GetValue()
             self.ComputeSeries(
                 editor.Timestamp,
                 editor.Mirror,
-                editor.TimeSeries,
+                TimeSeries(shift, MAX_SHIFT, editor.TimeSeries.SampleCount),
                 smoothing,
+                power,
+                noise
             ).Draw()
 
     class Series(TimeSeries):

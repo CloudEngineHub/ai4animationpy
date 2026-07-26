@@ -582,7 +582,7 @@ def CurvePlot(
             AI4Animation.Color.BLUE,
             AI4Animation.Color.GREEN,
             AI4Animation.Color.ORANGE,
-            AI4Animation.Color.PURPLE,
+            AI4Animation.Color.MAGENTA,
             AI4Animation.Color.BLACK,
         ]
         if colors is None

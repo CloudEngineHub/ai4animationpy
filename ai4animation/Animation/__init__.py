@@ -1,5 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 from . import (
+    AudioModule,
     ContactModule,
     Dataset,
     GuidanceModule,
@@ -22,5 +23,6 @@ __all__ = [
     "ContactModule",
     "GuidanceModule",
     "TrackingModule",
+    "AudioModule",
     "Dataset",
 ]

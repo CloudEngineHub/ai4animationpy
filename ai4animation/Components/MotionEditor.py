@@ -32,6 +32,9 @@ class MotionEditor(Component):
     def LoadMotion(self, index):
         if len(self.Dataset) > 0:
             if 0 <= index < len(self.Dataset):
+                if self.Motion is not None:
+                    for module in self.Motion.Modules:
+                        module.Shutdown()
                 self.Motion = self.Dataset.LoadMotion(index)
                 self.Timestamp = 0.0
         else:
