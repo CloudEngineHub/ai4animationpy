@@ -50,6 +50,8 @@ from .Components.MotionEditor import MotionEditor
 from .Core import (
     AudioPlayer,
     Audio,
+    Path,
+    PathPlanner3D,
     Physics,
 )
 from .Entity import Entity
@@ -61,7 +63,7 @@ from .IK.FABRIK import FABRIK
 from .Import.GLBImporter import GLB
 
 # Math classes - re-export for convenience
-from .Math import Quaternion, Rotation, Tensor, Transform, Vector3
+from .Math import Quaternion, Rotation, Spline, Tensor, Transform, Vector3
 from .Profiler import Profiler
 from .Scene import Scene
 
@@ -92,6 +94,8 @@ __all__ = [
     "Physics",
     "AudioPlayer",
     "Audio",
+    "PathPlanner3D",
+    "Path",
     # Animation
     "Motion",
     "Hierarchy",
@@ -134,4 +138,5 @@ __all__ = [
     "Vector3",
     "Rotation",
     "Quaternion",
+    "Spline",
 ]

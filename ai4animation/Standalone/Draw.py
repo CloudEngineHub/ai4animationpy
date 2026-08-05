@@ -24,6 +24,29 @@ def Cube(position, size=0.1, color=BLACK):
         rl.DrawCube(pos, size, size, size, color)
 
 
+def Cuboid(position, size, color=BLACK):
+    """Draw axis-aligned cuboids. ``size`` is [3] or [N,3] extents (full width)."""
+    positions = Tensor.Create(position).reshape(-1, 3)
+    if positions.shape[0] == 0:
+        return
+    sizes = Tensor.Create(size).reshape(-1, 3)
+    if sizes.shape[0] == 1 and positions.shape[0] > 1:
+        sizes = Tensor.Repeat(sizes, positions.shape[0], 0)
+    for pos, extent in zip(positions.tolist(), sizes.tolist()):
+        rl.DrawCube(pos, extent[0], extent[1], extent[2], color)
+
+
+def WireCuboid(position, size, color=BLACK):
+    positions = Tensor.Create(position).reshape(-1, 3)
+    if positions.shape[0] == 0:
+        return
+    sizes = Tensor.Create(size).reshape(-1, 3)
+    if sizes.shape[0] == 1 and positions.shape[0] > 1:
+        sizes = Tensor.Repeat(sizes, positions.shape[0], 0)
+    for pos, extent in zip(positions.tolist(), sizes.tolist()):
+        rl.DrawCubeWires(pos, extent[0], extent[1], extent[2], color)
+
+
 # Default is 16 rings (first parameter) and 16 slices (second parameter)
 def Sphere(position, size=0.1, resolution=6, color=BLACK):
     if position.shape[0] == 0:

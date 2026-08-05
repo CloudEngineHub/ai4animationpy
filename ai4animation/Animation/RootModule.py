@@ -462,6 +462,12 @@ class RootModule(Module):
         def GetVelocity(self, index):
             return Vector3.GetVector(self.Velocities, index)
 
+        def Increment(self, start, end):
+            """Shift series samples left in [start, end), matching Unity RootModule.Series."""
+            for i in range(start, end):
+                self.Transforms[i] = self.Transforms[i + 1].copy()
+                self.Velocities[i] = self.Velocities[i + 1].copy()
+
         def GetLength(self):
             prev = Transform.GetPosition(self.Transforms)[..., :-1, :]
             next = Transform.GetPosition(self.Transforms)[..., 1:, :]
@@ -478,6 +484,37 @@ class RootModule(Module):
                         pivot + Vector3.Create(horizontal[0], offset[1], horizontal[2]),
                         index,
                     )
+
+        def ControlFromTarget(self, start, goal, strength=1.0):
+            start_position = Transform.GetPosition(start).copy()
+            goal_position = Transform.GetPosition(goal).copy()
+            start_position[..., 1] = 0.0
+            goal_position[..., 1] = 0.0
+
+            delta = goal_position - start_position
+            start_direction = Transform.GetAxisZ(start).copy()
+            start_direction[..., 1] = 0.0
+            if Vector3.Length(delta) != 0.0:
+                goal_direction = delta
+            else:
+                goal_direction = Transform.GetAxisZ(goal).copy()
+                goal_direction[..., 1] = 0.0
+            if Vector3.Length(goal_direction) == 0.0:
+                goal_direction = start_direction
+            if Vector3.Length(start_direction) == 0.0:
+                start_direction = goal_direction
+
+            weight = Tensor.Unsqueeze(Tensor.LinSpace(0.0, 1.0, self.SampleCount), -1)
+            positions = Vector3.Lerp(start_position, goal_position, weight)
+            directions = Vector3.Normalize(
+                Vector3.Lerp(start_direction, goal_direction, weight)
+            )
+            self.Transforms = Transform.TR(positions, Rotation.LookPlanar(directions))
+            self.Velocities = Tensor.Repeat(
+                (strength * delta / max(self.Window, Tensor.EPS)).reshape(1, 3),
+                self.SampleCount,
+                0,
+            )
 
         def Control(
             self,
