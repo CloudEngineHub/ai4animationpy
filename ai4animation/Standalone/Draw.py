@@ -16,6 +16,14 @@ def ScreenHeight():
     return rl.GetScreenHeight()
 
 
+def SetDepthRendering(value):
+    rl.rlDrawRenderBatchActive()
+    if value:
+        rl.rlEnableDepthTest()
+    else:
+        rl.rlDisableDepthTest()
+
+
 def Cube(position, size=0.1, color=BLACK):
     if position.shape[0] == 0:
         return

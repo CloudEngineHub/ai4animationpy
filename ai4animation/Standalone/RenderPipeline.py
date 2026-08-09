@@ -48,6 +48,7 @@ from raylib import (
     rlDisableFramebuffer,
     rlDrawRenderBatchActive,
     rlEnableColorBlend,
+    rlEnableDepthMask,
     rlEnableDepthTest,
     rlEnableFramebuffer,
     rlEnableShader,
@@ -655,6 +656,8 @@ class RenderPipeline(Component):
             SHADER_UNIFORM_FLOAT,
         )
         ClearBackground(RAYWHITE)
+        rlEnableDepthMask()
+        rlEnableDepthTest()
         DrawTextureRec(
             self.Gbuffer.color,
             Rectangle(0, 0, self.Gbuffer.color.width, -self.Gbuffer.color.height),
@@ -662,6 +665,7 @@ class RenderPipeline(Component):
             WHITE,
         )
         EndShaderMode()
+        rlDisableDepthTest()
 
     def RenderBloom(self):
         BeginShaderMode(self.BloomShader)

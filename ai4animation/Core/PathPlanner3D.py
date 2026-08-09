@@ -376,12 +376,13 @@ class PathPlanner3D:
         )
 
         if self.ObstacleCenters.shape[0] > 0:
+            AI4Animation.Draw.SetDepthRendering(True)
             AI4Animation.Draw.Cuboid(
                 self.ObstacleCenters,
                 self.ObstacleSizes,
                 color=Utility.Opacity(AI4Animation.Color.ORANGE, 1.0),
             )
-
+            AI4Animation.Draw.SetDepthRendering(False)
         if draw_geometry:
             # AI4Animation.Draw.Cuboid(
             #     self.Positions[self.Walkable],

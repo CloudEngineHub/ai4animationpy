@@ -106,10 +106,11 @@ class AI4Animation:
     @staticmethod
     def __DRAW__():
         if AI4Animation.Standalone is not None:
+            AI4Animation.Draw.SetDepthRendering(False)
+            AI4Animation.Scene.Draw()
             if hasattr(AI4Animation.Program, "Draw"):
                 AI4Animation.Program.Draw()
-            AI4Animation.Scene.Draw()
-
+            AI4Animation.Draw.SetDepthRendering(True)
     @staticmethod
     def __GUI__():
         if AI4Animation.Standalone is not None:
