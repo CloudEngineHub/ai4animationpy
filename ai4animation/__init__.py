@@ -50,8 +50,6 @@ from .Components.MotionEditor import MotionEditor
 from .Core import (
     AudioPlayer,
     Audio,
-    Path,
-    PathPlanner3D,
     Physics,
 )
 from .Entity import Entity
@@ -94,8 +92,6 @@ __all__ = [
     "Physics",
     "AudioPlayer",
     "Audio",
-    "PathPlanner3D",
-    "Path",
     # Animation
     "Motion",
     "Hierarchy",
