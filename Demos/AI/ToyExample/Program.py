@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import numpy as np
 import torch
 from ai4animation import (

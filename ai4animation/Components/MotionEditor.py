@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Editor component for interactive motion playback, timeline control, and module visualization."""
 
 from ai4animation import Time
@@ -24,7 +25,10 @@ class MotionEditor(Component):
         self.Timescale = 1.0
         self.Mirror = False
 
+        self.Instance = None
         self.Motion = None
+        self.MotionIndices = []
+        self.ActorIndices = []
         self.LoadMotion(0)
 
         self.Files = self.Dataset.Files
@@ -32,11 +36,21 @@ class MotionEditor(Component):
     def LoadMotion(self, index):
         if len(self.Dataset) > 0:
             if 0 <= index < len(self.Dataset):
-                if self.Motion is not None:
-                    for module in self.Motion.Modules:
-                        module.Shutdown()
-                self.Motion = self.Dataset.LoadMotion(index)
+                self.Instance = self.Dataset.LoadInstance(index)
+                self.Motion = self.Instance.Motion
                 self.Timestamp = 0.0
+
+                # Keep aligned source and destination indices only for bones shared
+                # by the motion clip and actor.
+                self.MotionIndices = []
+                self.ActorIndices = []
+                for actor_index, name in enumerate(
+                    list(self.Actor.Skeleton.Hierarchy.BoneNames)
+                ):
+                    motion_index = self.Motion.Hierarchy.NameToIndex.get(name)
+                    if motion_index is not None:
+                        self.MotionIndices.append(motion_index)
+                        self.ActorIndices.append(actor_index)
         else:
             print("Dataset has no files")
 
@@ -53,17 +67,20 @@ class MotionEditor(Component):
         if self.IsSetup():
             self.Timestamp = timestamp
             if self.Actor:
-                self.Actor.SetTransforms(
-                    self.Motion.GetBoneTransformations(
-                        timestamp, self.Actor.GetBoneNames(), mirrored=self.Mirror
+                if self.ActorIndices:
+                    self.Actor.Skeleton.SetTransforms(
+                        self.Motion.GetBoneTransformations(
+                            timestamp, self.MotionIndices, mirrored=self.Mirror
+                        ),
+                        self.ActorIndices,
                     )
-                )
-                self.Actor.SetVelocities(
-                    self.Motion.GetBoneVelocities(
-                        timestamp, self.Actor.GetBoneNames(), mirrored=self.Mirror
+                    self.Actor.Skeleton.SetVelocities(
+                        self.Motion.GetBoneVelocities(
+                            timestamp, self.MotionIndices, mirrored=self.Mirror
+                        ),
+                        self.ActorIndices,
                     )
-                )
-                self.Actor.Entity.SetScale(self.Motion.Scale)
+                self.Actor.SetScale(self.Motion.Scale)
 
             for module in self.Motion.Modules:
                 module.Callback(self)
@@ -72,12 +89,15 @@ class MotionEditor(Component):
                 self.Actor.SyncToScene()
 
     def LoadPreviousMotion(self):
-        index = self.Dataset.GetMotionIndex(self.Motion)
+        index = self.GetMotionIndex()
         self.LoadMotion(0 if index is None else (index - 1))
 
     def LoadNextMotion(self):
-        index = self.Dataset.GetMotionIndex(self.Motion)
+        index = self.GetMotionIndex()
         self.LoadMotion(0 if index is None else (index + 1))
+
+    def GetMotionIndex(self):
+        return None if self.Instance is None else self.Instance.Index
 
     def Standalone(self):
         self.Canvas = AI4Animation.GUI.Canvas(
@@ -145,7 +165,7 @@ class MotionEditor(Component):
             self.Slider_Assets.SetValue(value)
             self.LoadMotion(index)
         else:
-            index = self.Dataset.GetMotionIndex(self.Motion)
+            index = self.GetMotionIndex()
             self.Slider_Assets.SetValue(0 if index is None else (index / count))
 
         self.Button_Prev_Motion.GUI()
@@ -170,7 +190,7 @@ class MotionEditor(Component):
             canvas=self.Canvas,
         )
 
-        index = self.Dataset.GetMotionIndex(self.Motion)
+        index = self.GetMotionIndex()
         AI4Animation.Draw.Text(
             f"Asset {0 if index is None else (index + 1)}/{len(self.Dataset)}",
             0.86,

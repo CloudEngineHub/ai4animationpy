@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Time series representation for sampling animation data at pivot-relative timestamps."""
 
 from ai4animation import Utility
@@ -65,9 +66,11 @@ class TimeSeries:
     # def GetSampleIndices(self, startIndex, endIndex):
     #     return Tensor.Arange(startIndex, endIndex, 1)
 
-    def SimulateTimestamps(self, timestamp=0.0):
+    def SimulateTimestamps(self, timestamp=0.0, timescale=1.0):
         return Tensor.LinSpace(
-            timestamp + self.Start, timestamp + self.End, self.SampleCount
+            timestamp + timescale * self.Start,
+            timestamp + timescale * self.End,
+            self.SampleCount,
         )
 
     def Draw(self):

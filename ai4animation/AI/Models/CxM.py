@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -158,7 +159,9 @@ class Sampler(nn.Module):
         if update_statistics:
             self.FeatureStatistics.Update(features)
         if noise is not None:
-            features += torch.randn_like(features) * noise * self.FeatureStatistics.GetStd()
+            features += (
+                torch.randn_like(features) * noise * self.FeatureStatistics.GetStd()
+            )
         features = self.FeatureStatistics.Normalize(features)
 
         target_codes = self.Codebook(targets, sample=False)

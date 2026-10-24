@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Motion data container with bone transforms, velocities, and module support."""
 
 import os
@@ -84,15 +85,6 @@ class Motion:
             start_padding, self.TotalTime - end_padding, 1.0 / framerate
         )
 
-    def GetBoneIndices(self, names_or_indices=None):
-        if names_or_indices is None:
-            return list(range(self.NumJoints))
-        if isinstance(names_or_indices, int):
-            return [names_or_indices]
-        elif isinstance(names_or_indices[0], int):
-            return list(names_or_indices)
-        return self.Hierarchy.GetBoneIndex(names_or_indices)
-
     def GetBoneTransformations(
         self, timestamps=None, bone_names_or_indices=None, mirrored=False
     ):
@@ -113,7 +105,7 @@ class Motion:
                     )
 
         frame_indices = self.GetFrameIndices(timestamps)
-        bone_indices = self.GetBoneIndices(bone_names_or_indices)
+        bone_indices = self.Hierarchy.GetBoneIndices(bone_names_or_indices)
 
         transformations = (
             self.Frames[frame_indices.flatten()][:, bone_indices]
@@ -186,8 +178,8 @@ class Motion:
             for bone, parent in zip(bone_names_or_indices, parent_names_or_indices)
         ]
 
-        bone_indices = self.GetBoneIndices(bone_names_or_indices)
-        parent_indices = self.GetBoneIndices(parent_names_or_indices)
+        bone_indices = self.Hierarchy.GetBoneIndices(bone_names_or_indices)
+        parent_indices = self.Hierarchy.GetBoneIndices(parent_names_or_indices)
 
         bone_positions = self.GetBonePositions(timestamps, bone_indices, mirrored)
         parent_positions = self.GetBonePositions(timestamps, parent_indices, mirrored)
@@ -258,9 +250,7 @@ class Motion:
                 Transform.GetRotation(frames)
             ),  # (F, J, 4) float32, world quaternions (x, y, z, w)
             bone_names=self.Hierarchy.BoneNames,  # (J,) str, joint names
-            parent_indices=np.array(
-                self.Hierarchy.ParentIndices
-            ),  # (J,) ints, parent index per joint, -1 for root
+            parent_indices=self.Hierarchy.ParentIndices,  # (J,) parent index or None
             out_path=absolute_path,
             fps=self.Framerate,
         )

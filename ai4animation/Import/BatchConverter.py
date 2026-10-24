@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import multiprocessing
 import os
 import sys
@@ -9,6 +10,7 @@ from ai4animation import Utility
 from ai4animation.Animation.Motion import Motion
 from ai4animation.Math import Vector3
 from tqdm import tqdm
+
 
 class BatchConverter:
     """Batch processor for converting GLB, FBX, and BVH files to NPZ motion data"""
@@ -91,9 +93,15 @@ class BatchConverter:
             ext = os.path.splitext(filename)[1].lower()
 
             if ext == ".glb":
-                motion = Motion.LoadFromGLB(filepath, bone_names)
+                motion = Motion.LoadFromGLB(
+                    filepath,
+                    bone_names,
+                )
             elif ext == ".fbx":
-                motion = Motion.LoadFromFBX(filepath, bone_names)
+                motion = Motion.LoadFromFBX(
+                    filepath,
+                    bone_names,
+                )
             elif ext == ".bvh":
                 motion = Motion.LoadFromBVH(
                     filepath,
@@ -182,7 +190,9 @@ def main():
         help="Absolute path to a definitions file and the variable name within it to use for bone names",
     )
     parser.add_argument(
-        "--scale", help="Scale factor for files to convert betweem m/cm units etc. (default: 1.0 for m)", type=float
+        "--scale",
+        help="Scale factor for files to convert betweem m/cm units etc. (default: 1.0 for m)",
+        type=float,
     )
 
     args = parser.parse_args()

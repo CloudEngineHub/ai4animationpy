@@ -1,3 +1,5 @@
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import numpy as np
 import raylib as rl
 from ai4animation import Utility
@@ -27,6 +29,9 @@ class Color:
         for i in range(total):
             colors.append(Color.GetRainbowColor(i, total))
         return colors
+
+    def Lerp(A, B, w):
+        return tuple(int(a * (1 - w) + b * w) for a, b in zip(A, B))
 
     BLACK = rl.colors.BLACK
     WHITE = rl.colors.WHITE

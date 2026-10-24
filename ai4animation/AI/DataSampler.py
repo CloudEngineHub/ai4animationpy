@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Threaded data sampler for asynchronous batch loading during training."""
 
 import os
@@ -136,7 +137,7 @@ class DataSampler:
             desc=f"Epoch {current_epoch}/{total_epochs}",
             unit="batch",
             ncols=140,
-            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]",
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]",
         )
 
         try:
@@ -160,6 +161,10 @@ class DataSampler:
                     yield future.result()
 
                     pbar.update(1)
+                    elapsed = pbar.format_dict["elapsed"]
+                    if elapsed > 0:
+                        samples_per_sec = pbar.n * self.BatchSize / elapsed
+                        pbar.set_postfix_str(f"{samples_per_sec:.1f} samples/s")
         finally:
             pbar.close()
 

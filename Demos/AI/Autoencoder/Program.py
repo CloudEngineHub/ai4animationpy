@@ -1,6 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
 
 import torch
@@ -29,8 +29,9 @@ from ai4animation import (
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Cranberry")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
 
 EPOCH_COUNT = 150
 BATCH_SIZE = 32
@@ -158,11 +159,13 @@ class Program:
 
     def GetEditorFeatures(self):
         features = FeedTensor("X", FEATURE_DIM)
-        root = self.Editor.Actor.Root
+        root = self.Editor.Actor.Skeleton.Root
         transforms = Transform.TransformationTo(
-            self.Editor.Actor.GetTransforms(BONES), root
+            self.Editor.Actor.Skeleton.GetTransforms(BONES), root
         )
-        velocities = Vector3.DirectionTo(self.Editor.Actor.GetVelocities(BONES), root)
+        velocities = Vector3.DirectionTo(
+            self.Editor.Actor.Skeleton.GetVelocities(BONES), root
+        )
         features.Feed(Transform.GetPosition(transforms))
         features.Feed(Transform.GetAxisZ(transforms))
         features.Feed(Transform.GetAxisY(transforms))
@@ -175,21 +178,24 @@ class Program:
             xBatch = self.GetEditorFeatures()
             yPred = Tensor.ToNumPy(self.Network(xBatch))
             output = ReadTensor("Y", yPred)
-            self.Actor.Root = self.Editor.Actor.Root
-            self.Actor.SetPositions(
-                Vector3.PositionFrom(output.ReadVector3(len(BONES)), self.Actor.Root)
-            )
-            self.Actor.SetRotations(
-                Rotation.RotationFrom(
-                    output.ReadRotation3D(len(BONES)), self.Actor.Root
+            self.Actor.Skeleton.Root = self.Editor.Actor.Skeleton.Root
+            self.Actor.Skeleton.SetPositions(
+                Vector3.PositionFrom(
+                    output.ReadVector3(len(BONES)), self.Actor.Skeleton.Root
                 )
             )
-            self.Actor.SetVelocities(
-                Vector3.DirectionFrom(output.ReadVector3(len(BONES)), self.Actor.Root)
+            self.Actor.Skeleton.SetRotations(
+                Rotation.RotationFrom(
+                    output.ReadRotation3D(len(BONES)), self.Actor.Skeleton.Root
+                )
             )
-            for bone in self.Actor.Bones:
-                bone.RestoreLength()
-            self.Actor.RestoreBoneAlignments()
+            self.Actor.Skeleton.SetVelocities(
+                Vector3.DirectionFrom(
+                    output.ReadVector3(len(BONES)), self.Actor.Skeleton.Root
+                )
+            )
+            self.Actor.Skeleton.RestoreBoneLengths()
+            self.Actor.Skeleton.RestoreBoneAlignments()
             self.Actor.SyncToScene()
         self.Network.train()
 

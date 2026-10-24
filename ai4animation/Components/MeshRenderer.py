@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Mesh renderer component for displaying skinned GLB meshes on actors."""
 
 from ai4animation.AI4Animation import AI4Animation

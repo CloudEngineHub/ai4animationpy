@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
 import sys
 
@@ -11,6 +12,11 @@ IS_MACOS = sys.platform == "darwin"
 
 DEFAULT_WIDTH = 1920
 DEFAULT_HEIGHT = 1080
+MAX_DELTA_TIME = 1.0 / 30.0
+
+
+def LimitDeltaTime(delta_time):
+    return Utility.Clamp(delta_time, 0.0, MAX_DELTA_TIME)
 
 
 class Standalone:
@@ -90,7 +96,7 @@ class Standalone:
 
     def Run(self):
         while not rl.WindowShouldClose():
-            AI4Animation.Update(rl.GetFrameTime())
+            AI4Animation.Update(LimitDeltaTime(rl.GetFrameTime()))
         self.Exit()
 
     def Exit(self):

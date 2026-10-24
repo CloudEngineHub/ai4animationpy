@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Export skeletal animations as glTF 2.0 binary (.glb) files.
 
 Inputs are expressed in WORLD space (positions and quaternion rotations per
@@ -72,14 +73,14 @@ def _quat_rotate(q: NDArray, v: NDArray) -> NDArray:
 def _world_to_local(
     world_positions: NDArray,
     world_rotations: NDArray,
-    parent_indices: Sequence[int],
+    parent_indices: Sequence[Optional[int]],
 ) -> tuple[NDArray, NDArray]:
     """Convert world TR per joint to local TR per joint.
 
     Args:
         world_positions: (F, J, 3) float
         world_rotations: (F, J, 4) float quaternions in (x, y, z, w)
-        parent_indices: length J, parent index per joint, -1 for root
+        parent_indices: length J, parent index per joint, None for root
 
     Returns:
         local_positions (F, J, 3), local_rotations (F, J, 4)
@@ -91,7 +92,7 @@ def _world_to_local(
     local_rotations = np.zeros_like(world_rotations)
 
     for j, parent in enumerate(parent_indices):
-        if parent < 0:
+        if parent is None:
             local_positions[:, j] = world_positions[:, j]
             local_rotations[:, j] = world_rotations[:, j]
         else:
@@ -221,7 +222,7 @@ def _validate_export_inputs(
     positions: NDArray,
     rotations: NDArray,
     bone_names: Sequence[str],
-    parent_indices: Sequence[int],
+    parent_indices: Sequence[Optional[int]],
     fps: float,
 ) -> None:
     if positions.ndim != 3 or positions.shape[-1] != 3:
@@ -245,7 +246,7 @@ def _validate_export_inputs(
 
 def _build_nodes(
     bone_names: Sequence[str],
-    parents: Sequence[int],
+    parents: Sequence[Optional[int]],
     local_positions: NDArray,
     local_rotations: NDArray,
 ) -> tuple[List[Node], List[int]]:
@@ -253,7 +254,7 @@ def _build_nodes(
     children_of: List[List[int]] = [[] for _ in range(num_joints)]
     roots: List[int] = []
     for j, p in enumerate(parents):
-        if p < 0:
+        if p is None:
             roots.append(j)
         else:
             children_of[p].append(j)
@@ -336,7 +337,7 @@ class GLBExporter:
         positions: NDArray,
         rotations: NDArray,
         bone_names: Sequence[str],
-        parent_indices: Sequence[int],
+        parent_indices: Sequence[Optional[int]],
         out_path: str,
         fps: float,
         animation_name: Optional[str] = None,
@@ -350,7 +351,7 @@ class GLBExporter:
             rotations: (F, J, 4) float, world joint quaternions (x, y, z, w)
                 per frame.
             bone_names: length J sequence of joint names.
-            parent_indices: length J sequence of parent indices; -1 for roots.
+            parent_indices: length J sequence of parent indices; None for roots.
             out_path: destination path. ".glb" is appended if missing.
             fps: animation frame rate in Hz.
             animation_name: optional name for the embedded animation.

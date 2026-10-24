@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Tensor writer for incrementally feeding input values to a neural network."""
 
 import torch
@@ -6,14 +7,14 @@ from ai4animation.Math import Tensor
 
 
 class FeedTensor:
-    def __init__(self, name, shape):
+    def __init__(self, name, shape, backend=None):
         self.Name = name
         self.Pivot = 0
         self.Shape = [shape] if type(shape) is int else shape
         self.Fixed = list(self.Shape[:-1])
         self.Dims = self.Shape[-1]  # Dim should be last dimension of shape
         self.Flatten = len(self.Shape) - 1
-        self.Data = Tensor.Zeros(shape)
+        self.Data = Tensor.Zeros(shape, backend=backend)
 
     def __enter__(self):
         return self
@@ -48,6 +49,9 @@ class FeedTensor:
             mask.append(2)
         values = values[..., mask]
         self.Feed(values)
+
+    def FeedXZ(self, values):
+        self.FeedVector3(values, x=True, y=False, z=True)
 
     def GetTensor(self):
         if self.Pivot < self.Dims:

@@ -1,19 +1,17 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
+
 import numpy as np
 import torch
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Geno")
-sys.path.append(ASSETS_PATH)
-import Definitions
 
 from ai4animation import (
     Actor,
     AI4Animation,
-    FABRIK,
     FeedTensor,
     GuidanceModule,
     MotionModule,
@@ -24,17 +22,21 @@ from ai4animation import (
     Time,
     TimeSeries,
     Transform,
+    Utility,
     Vector3,
+)
+
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
 )
 from LegIK import LegIK
 from Sequence import Sequence
 
+
 class MotionController:
     def __init__(self):
         self.Actor = AI4Animation.Scene.AddEntity("Actor").AddComponent(
-            Actor,
-            os.path.join(ASSETS_PATH, "Model.glb"),
-            Definitions.FULL_BODY_NAMES
+            Actor, os.path.join(ASSETS_PATH, "Model.glb"), Definitions.FULL_BODY_NAMES
         )
         self.Model = torch.load(
             os.path.join(SCRIPT_DIR, "Models/Network.pt"), weights_only=False
@@ -63,12 +65,14 @@ class MotionController:
         self.SimulationObject = RootModule.Series(self.ControlSeries)
         self.RootControl = RootModule.Series(self.ControlSeries)
         self.GuidanceControl = GuidanceModule.Guidance(
-            "Guidance", self.Actor.GetBoneNames(), self.Actor.GetPositions().copy()
+            "Guidance",
+            list(self.Actor.Skeleton.Hierarchy.BoneNames),
+            self.Actor.Skeleton.GetPositions().copy(),
         )
         self.GuidanceTemplates = {}
-        directory = "Guidances"
+        directory = os.path.join(SCRIPT_DIR, "Guidances")
         for path in sorted(os.listdir(directory)):
-            with np.load(directory + "/" + path, allow_pickle=True) as data:
+            with np.load(os.path.join(directory, path), allow_pickle=True) as data:
                 id = Path(path).stem
                 names = data["Names"]
                 positions = data["Positions"]
@@ -86,48 +90,41 @@ class MotionController:
             Definitions.RightAnkleName,
             Definitions.RightBallName,
         ]
-        self.ContactIndices = self.Actor.GetBoneIndices(self.ContactBones)
+        self.ContactIndices = self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+            self.ContactBones
+        )
 
         self.LeftLegIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.LeftHipName),
-                self.Actor.GetBone(Definitions.LeftAnkleName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.LeftHipName,
+                Definitions.LeftAnkleName,
             ),
-            FABRIK(
-                self.Actor.GetBone(Definitions.LeftAnkleName),
-                self.Actor.GetBone(Definitions.LeftBallName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.LeftAnkleName,
+                Definitions.LeftBallName,
             ),
         )
 
         self.RightLegIK: LegIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.RightHipName),
-                self.Actor.GetBone(Definitions.RightAnkleName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.RightHipName,
+                Definitions.RightAnkleName,
             ),
-            FABRIK(
-                self.Actor.GetBone(Definitions.RightAnkleName),
-                self.Actor.GetBone(Definitions.RightBallName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.RightAnkleName,
+                Definitions.RightBallName,
             ),
         )
         self.Previous = None
         self.Sequence = None
 
-
-    def Update(
-        self,
-        goal,
-        control_strength,
-        guidance_pose,
-        dt,
-        prediction_frequency
-    ):
+    def Update(self, goal, control_strength, guidance_pose, dt, prediction_frequency):
         # Update control every frame
         self.Control(goal, control_strength, guidance_pose)
 
         # Predict future sequence every few frames
-        if (
-            self.Timestamp == 0.0
-            or Time.TotalTime - self.Timestamp > (1.0 / prediction_frequency)
+        if self.Timestamp == 0.0 or Time.TotalTime - self.Timestamp > (
+            1.0 / prediction_frequency
         ):
             self.Timestamp = Time.TotalTime
             self.PredictSequence()
@@ -137,15 +134,22 @@ class MotionController:
             self.Animate(dt, prediction_frequency)
 
     def Control(self, goal, control_strength, guidance_pose):
-        self.SimulationObject.ControlFromTarget(
-            Transform.Interpolate(self.Actor.Root, self.SimulationObject.Transforms[0], 0.5),
+        self.ControlFromTarget(
+            self.SimulationObject,
+            Transform.Interpolate(
+                self.Actor.Skeleton.Root,
+                self.SimulationObject.Transforms[0],
+                0.5,
+            ),
             goal,
             control_strength,
         )
         speed = Vector3.Length(self.SimulationObject.GetVelocity(0))
 
         if speed < 0.1:
-            self.GuidanceControl.Positions = self.GuidanceTemplates["Idle"].Positions.copy()
+            self.GuidanceControl.Positions = self.GuidanceTemplates[
+                "Idle"
+            ].Positions.copy()
         else:
             self.GuidanceControl.Positions = guidance_pose.copy()
 
@@ -159,7 +163,7 @@ class MotionController:
             )
             for i in range(self.RootControl.SampleCount):
                 target = Transform.GetPosition(self.RootControl.Transforms)[i:]
-                current = self.Actor.GetRootPosition().reshape(-1, 3)
+                current = self.Actor.Skeleton.GetRootPosition().reshape(-1, 3)
                 time = self.RootControl.Timestamps[i:].reshape(-1, 1)
                 self.RootControl.Velocities[i] = Tensor.Sum(
                     target - current, axis=0, keepDim=False
@@ -173,10 +177,12 @@ class MotionController:
     def PredictSequence(self):
         inputs = FeedTensor("X", self.Model.input_dim())
 
-        root = self.Actor.Root
+        root = self.Actor.Skeleton.Root
 
-        transforms = Transform.TransformationTo(self.Actor.GetTransforms(), root)
-        velocities = Vector3.DirectionTo(self.Actor.GetVelocities(), root)
+        transforms = Transform.TransformationTo(
+            self.Actor.Skeleton.GetTransforms(), root
+        )
+        velocities = Vector3.DirectionTo(self.Actor.Skeleton.GetVelocities(), root)
         inputs.Feed(Transform.GetPosition(transforms))
         inputs.Feed(Transform.GetAxisZ(transforms))
         inputs.Feed(Transform.GetAxisY(transforms))
@@ -221,13 +227,13 @@ class MotionController:
 
         futureMotionTransforms = Transform.TransformationFrom(
             Transform.TR(
-                outputs.ReadVector3(self.Actor.GetBoneCount()),
-                outputs.ReadRotation3D(self.Actor.GetBoneCount()),
+                outputs.ReadVector3(self.Actor.Skeleton.Hierarchy.BoneCount),
+                outputs.ReadRotation3D(self.Actor.Skeleton.Hierarchy.BoneCount),
             ),
             futureRootTransforms.reshape(self.SequenceLength, 1, 4, 4),
         )
         futureMotionVelocities = Vector3.DirectionFrom(
-            outputs.ReadVector3(self.Actor.GetBoneCount()),
+            outputs.ReadVector3(self.Actor.Skeleton.Hierarchy.BoneCount),
             futureRootTransforms.reshape(self.SequenceLength, 1, 4, 4),
         )
 
@@ -242,7 +248,7 @@ class MotionController:
         )
         self.Sequence.Motion = MotionModule.Series(
             self.ControlSeries,
-            self.Actor.GetBoneNames(),
+            list(self.Actor.Skeleton.Hierarchy.BoneNames),
             futureMotionTransforms,
             futureMotionVelocities,
         )
@@ -250,8 +256,8 @@ class MotionController:
         # Predict Contacts
         inputs = FeedTensor("X", self.PostProcessor.input_dim())
 
-        currentTransforms = self.Actor.GetTransforms(self.ContactIndices)
-        currentVelocities = self.Actor.GetVelocities(self.ContactIndices)
+        currentTransforms = self.Actor.Skeleton.GetTransforms(self.ContactIndices)
+        currentVelocities = self.Actor.Skeleton.GetVelocities(self.ContactIndices)
         targetTransforms = self.Sequence.Motion.GetTransforms(self.ContactBones)[
             1:, :, :
         ]
@@ -288,7 +294,8 @@ class MotionController:
     def Animate(self, dt, prediction_frequency):
         requiredSpeed = (
             Vector3.Distance(
-                self.Actor.GetRootPosition(), self.SimulationObject.GetPosition(0)
+                self.Actor.Skeleton.GetRootPosition(),
+                self.SimulationObject.GetPosition(0),
             )
             + self.SimulationObject.GetLength()
         ) / self.SequenceWindow
@@ -332,21 +339,23 @@ class MotionController:
             self.Previous.SampleContacts(sdt), self.Sequence.SampleContacts(sdt), blend
         )
 
-        self.Actor.Root = Transform.Interpolate(
-            root, self.Actor.Root, self.Sequence.GetRootLock()
+        self.Actor.Skeleton.Root = Transform.Interpolate(
+            root, self.Actor.Skeleton.Root, self.Sequence.GetRootLock()
         )
-        self.Actor.SetTransforms(
+        self.Actor.Skeleton.SetTransforms(
             Transform.TR(
                 Vector3.Lerp(
-                    self.Actor.GetPositions() + velocities * sdt, positions, 0.5
+                    self.Actor.Skeleton.GetPositions() + velocities * sdt,
+                    positions,
+                    0.5,
                 ),
                 rotations,
             )
         )
-        self.Actor.SetVelocities(velocities)
+        self.Actor.Skeleton.SetVelocities(velocities)
 
-        self.Actor.RestoreBoneLengths()
-        self.Actor.RestoreBoneAlignments()
+        self.Actor.Skeleton.RestoreBoneLengths()
+        self.Actor.Skeleton.RestoreBoneAlignments()
 
         self.LeftLegIK.Solve(
             ankleContact=contacts[0],
@@ -355,7 +364,11 @@ class MotionController:
             maxAccuracy=self.SolverAccuracy,
             poleTarget=Vector3.PositionFrom(
                 Vector3.Create(0.0, 0.0, 1.0),
-                self.Actor.GetBone(Definitions.LeftKneeName).GetTransform(),
+                self.Actor.Skeleton.GetTransforms(
+                    self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+                        Definitions.LeftKneeName
+                    )
+                ),
             ),
             poleWeight=1.0,
         )
@@ -366,7 +379,11 @@ class MotionController:
             maxAccuracy=self.SolverAccuracy,
             poleTarget=Vector3.PositionFrom(
                 Vector3.Create(0.0, 0.0, 1.0),
-                self.Actor.GetBone(Definitions.RightKneeName).GetTransform(),
+                self.Actor.Skeleton.GetTransforms(
+                    self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+                        Definitions.RightKneeName
+                    )
+                ),
             ),
             poleWeight=1.0,
         )
@@ -376,3 +393,33 @@ class MotionController:
         self.Previous.Timestamps -= sdt
         self.Sequence.Timestamps -= sdt
 
+    def ControlFromTarget(self, trajectory, start, goal, strength=1.0):
+        start_position = Transform.GetPosition(start).copy()
+        goal_position = Transform.GetPosition(goal).copy()
+        start_position[..., 1] = 0.0
+        goal_position[..., 1] = 0.0
+
+        delta = goal_position - start_position
+        start_direction = Transform.GetAxisZ(start).copy()
+        start_direction[..., 1] = 0.0
+        if Vector3.Length(delta) != 0.0:
+            goal_direction = delta
+        else:
+            goal_direction = Transform.GetAxisZ(goal).copy()
+            goal_direction[..., 1] = 0.0
+        if Vector3.Length(goal_direction) == 0.0:
+            goal_direction = start_direction
+        if Vector3.Length(start_direction) == 0.0:
+            start_direction = goal_direction
+
+        weight = Tensor.Unsqueeze(Tensor.LinSpace(0.0, 1.0, trajectory.SampleCount), -1)
+        positions = Vector3.Lerp(start_position, goal_position, weight)
+        directions = Vector3.Normalize(
+            Vector3.Lerp(start_direction, goal_direction, weight)
+        )
+        trajectory.Transforms = Transform.TR(positions, Rotation.LookPlanar(directions))
+        trajectory.Velocities = Tensor.Repeat(
+            (strength * delta / max(trajectory.Window, Tensor.EPS)).reshape(1, 3),
+            trajectory.SampleCount,
+            0,
+        )

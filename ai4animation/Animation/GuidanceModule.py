@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Guidance module for loading and applying external motion guidance data."""
 
 import os
@@ -143,9 +144,9 @@ class GuidanceModule(Module):
                         self.Slider_Smooth.GetValue(),
                         editor.TimeSeries.SampleCount,
                     ),
-                    editor.Actor.GetBoneNames(),
+                    list(editor.Actor.Skeleton.Hierarchy.BoneNames),
                 )
-                guidance.DrawLegacy(editor.Actor)
+                guidance.DrawLegacy(editor.Actor.Skeleton)
                 if self.Button_Save.IsPressed():
                     guidance.Save()
 
@@ -164,7 +165,7 @@ class GuidanceModule(Module):
                     self.Motion.Hierarchy.BoneNames,
                     self.Motion.Hierarchy.ParentNames,
                 )
-                guidance.DrawAgnostic(editor.Actor.Root)
+                guidance.DrawAgnostic(editor.Actor.Skeleton.Root)
                 if self.Button_Save.IsPressed():
                     guidance.Save()
 
@@ -174,11 +175,11 @@ class GuidanceModule(Module):
             self.Names = names
             self.Positions = positions
 
-        def DrawLegacy(self, actor) -> None:
+        def DrawLegacy(self, skeleton) -> None:
             AI4Animation.Draw.Skeleton(
                 None,
-                Vector3.PositionFrom(self.Positions, actor.Root),
-                actor,
+                Vector3.PositionFrom(self.Positions, skeleton.Root),
+                skeleton,
                 size=2.0,
                 color=AI4Animation.Color.MAGENTA,
             )

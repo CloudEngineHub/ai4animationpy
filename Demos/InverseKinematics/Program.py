@@ -1,15 +1,16 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
 
-from ai4animation import Actor, AI4Animation, FABRIK, Vector3
+from ai4animation import Actor, AI4Animation, Utility
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Cranberry")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
 
 
 class Program:
@@ -19,30 +20,30 @@ class Program:
             Actor, os.path.join(ASSETS_PATH, "Model.glb"), Definitions.FULL_BODY_NAMES
         )
 
-        self.IK = FABRIK(
-            self.Actor.GetBone(Definitions.LeftShoulderName),
-            self.Actor.GetBone(Definitions.LeftWristName),
+        self.IK = self.Actor.Skeleton.CreateIK(
+            Definitions.LeftShoulderName, Definitions.LeftWristName
         )
 
         self.Target = AI4Animation.Scene.AddEntity("Target")
-        self.Target.SetPosition(
-            self.Actor.GetBone(Definitions.LeftWristName).GetPosition()
+        wrist_index = self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+            Definitions.LeftWristName
         )
+        self.Target.SetPosition(self.Actor.Skeleton.GetPositions(wrist_index))
 
-        self.Pose = self.Actor.GetTransforms()
+        self.Pose = self.Actor.Skeleton.GetTransforms()
 
     def Standalone(self):
         AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
 
     def Update(self):
-        self.Actor.SetTransforms(self.Pose)
+        self.Actor.Skeleton.SetTransforms(self.Pose)
         self.IK.Solve(
             self.Target.GetPosition(),
             self.Target.GetRotation(),
             max_iterations=10,
             threshold=0.001,
         )
-        self.Actor.SyncToScene(self.IK.Bones)
+        self.Actor.SyncToScene(self.IK.BoneIndices)
 
     def Draw(self):
         pass

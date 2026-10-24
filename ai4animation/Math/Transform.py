@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """4x4 homogeneous transformation matrix operations."""
 
 from ai4animation.Math import Rotation, Tensor, Vector3

@@ -1,10 +1,9 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
 # This demo is a rework of the MANN Siggraph 2018 paper "Mode adaptive Neural Networks for Quadruped Motion Control" by Starke et al.
 # The codebook matching model is trained on the same data as in the paper.
 
 import os
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -14,12 +13,9 @@ import torch
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Quadruped")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
 from ai4animation import (
     Actor,
     AI4Animation,
-    FABRIK,
     FeedTensor,
     GuidanceModule,
     MotionModule,
@@ -33,6 +29,10 @@ from ai4animation import (
     Transform,
     Utility,
     Vector3,
+)
+
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
 )
 from LegIK import LegIK
 from Sequence import Sequence
@@ -86,51 +86,57 @@ class Program:
         if source is None or target is None or source is target:
             return
 
-        common_bones = [name for name in target.GetBoneNames() if source.HasBone(name)]
-        target.SetRoot(np.array(source.GetRoot(), copy=True))
+        common_bones = [
+            name
+            for name in list(target.Skeleton.Hierarchy.BoneNames)
+            if name in source.Skeleton.Hierarchy.NameToIndex
+        ]
+        target.Skeleton.SetRoot(np.array(source.Skeleton.GetRoot(), copy=True))
         if common_bones:
-            target.SetTransforms(
-                np.array(source.GetTransforms(common_bones), copy=True),
+            target.Skeleton.SetTransforms(
+                np.array(source.Skeleton.GetTransforms(common_bones), copy=True),
                 common_bones,
             )
-            target.SetVelocities(
-                np.array(source.GetVelocities(common_bones), copy=True),
+            target.Skeleton.SetVelocities(
+                np.array(source.Skeleton.GetVelocities(common_bones), copy=True),
                 common_bones,
             )
         target.SyncToScene()
 
     def SyncInactiveActors(self):
-        for name, actor in self.Actors.items():
+        for _name, actor in self.Actors.items():
             if actor is not self.Actor:
                 self.CopyActorState(self.Actor, actor)
 
     def ConfigureActorBindings(self):
-        self.ContactIndices = self.Actor.GetBoneIndices(self.ContactBones)
+        self.ContactIndices = self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+            self.ContactBones
+        )
 
         self.LeftHandIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.LeftForeArmName),
-                self.Actor.GetBone(Definitions.LeftHandSiteName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.LeftForeArmName,
+                Definitions.LeftHandSiteName,
             )
         )
 
         self.RightHandIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.RightForeArmName),
-                self.Actor.GetBone(Definitions.RightHandSiteName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.RightForeArmName,
+                Definitions.RightHandSiteName,
             )
         )
 
         self.LeftFootIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.LeftKneeName),
-                self.Actor.GetBone(Definitions.LeftFootSiteName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.LeftKneeName,
+                Definitions.LeftFootSiteName,
             )
         )
         self.RightFootIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.RightKneeName),
-                self.Actor.GetBone(Definitions.RightFootSiteName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.RightKneeName,
+                Definitions.RightFootSiteName,
             )
         )
 
@@ -189,7 +195,9 @@ class Program:
 
         self.RootControl = RootModule.Series(self.ControlSeries)
         self.GuidanceControl = GuidanceModule.Guidance(
-            "Guidance", self.Actor.GetBoneNames(), self.Actor.GetPositions().copy()
+            "Guidance",
+            list(self.Actor.Skeleton.Hierarchy.BoneNames),
+            self.Actor.Skeleton.GetPositions().copy(),
         )
         self.GuidanceTemplates = {}
         directory = "Guidances"
@@ -225,12 +233,12 @@ class Program:
 
     def CameraRelativeInput(self, x, y):
         forward = (
-            self.Actor.GetRootPosition()
+            self.Actor.Skeleton.GetRootPosition()
             - AI4Animation.Standalone.Camera.Entity.GetPosition()
         )
         forward[1] = 0.0
         if Vector3.Length(forward) == 0.0:
-            forward = self.Actor.GetRootDirection()
+            forward = self.Actor.Skeleton.GetRootDirection()
         forward = Vector3.Normalize(forward)
 
         right = Vector3.Cross(forward, Vector3.Y)
@@ -355,7 +363,7 @@ class Program:
         if action_pose_active:
             speed = 0.0
             velocity = Vector3.Zero()
-            direction = self.Actor.GetRootDirection()
+            direction = self.Actor.Skeleton.GetRootDirection()
         else:
             velocity = speed * move_direction
             direction = velocity
@@ -364,7 +372,7 @@ class Program:
 
         position = Vector3.Lerp(
             self.SimulationObject.GetPosition(0),
-            self.Actor.GetRootPosition(),
+            self.Actor.Skeleton.GetRootPosition(),
             self.Synchronization,
         )
 
@@ -372,22 +380,9 @@ class Program:
         self.SimulationObject.Control(position, direction, velocity, Time.DeltaTime)
 
         speed = Vector3.Length(velocity)
-        if sit_active:
-            guidance_state = "Sit"
-        elif lie_active:
-            guidance_state = "Lie"
-        elif stand_active:
-            guidance_state = "Stand"
-        elif speed < 0.1:
-            guidance_state = "Sit" if self.Sequence is None else "Idle"
-        elif speed < LOCOMOTION_MODES["pace"]:
-            guidance_state = "Walk"
-        elif speed < LOCOMOTION_MODES["trot"]:
-            guidance_state = "Pace"
-        elif speed < LOCOMOTION_MODES["canter"]:
-            guidance_state = "Trot"
-        else:
-            guidance_state = "Canter"
+        guidance_state = self._SelectGuidanceState(
+            speed, sit_active, lie_active, stand_active
+        )
 
         self.CurrentGuidanceState = guidance_state
         self.GuidanceControl.Positions = self.GuidanceTemplates[
@@ -407,7 +402,7 @@ class Program:
             )
             for i in range(self.RootControl.SampleCount):
                 target = Transform.GetPosition(self.RootControl.Transforms)[i:]
-                current = self.Actor.GetRootPosition().reshape(-1, 3)
+                current = self.Actor.Skeleton.GetRootPosition().reshape(-1, 3)
                 time = self.RootControl.Timestamps[i:].reshape(-1, 1)
                 self.RootControl.Velocities[i] = Tensor.Sum(
                     target - current, axis=0, keepDim=False
@@ -418,13 +413,32 @@ class Program:
                 self.TrajectoryCorrection,
             )
 
+    def _SelectGuidanceState(self, speed, sit_active, lie_active, stand_active):
+        if sit_active:
+            return "Sit"
+        if lie_active:
+            return "Lie"
+        if stand_active:
+            return "Stand"
+        if speed < 0.1:
+            return "Sit" if self.Sequence is None else "Idle"
+        if speed < LOCOMOTION_MODES["pace"]:
+            return "Walk"
+        if speed < LOCOMOTION_MODES["trot"]:
+            return "Pace"
+        if speed < LOCOMOTION_MODES["canter"]:
+            return "Trot"
+        return "Canter"
+
     def Predict(self):
         inputs = FeedTensor("X", self.Model.input_dim())
 
-        root = self.Actor.Root
+        root = self.Actor.Skeleton.Root
 
-        transforms = Transform.TransformationTo(self.Actor.GetTransforms(), root)
-        velocities = Vector3.DirectionTo(self.Actor.GetVelocities(), root)
+        transforms = Transform.TransformationTo(
+            self.Actor.Skeleton.GetTransforms(), root
+        )
+        velocities = Vector3.DirectionTo(self.Actor.Skeleton.GetVelocities(), root)
         inputs.Feed(Transform.GetPosition(transforms))
         inputs.Feed(velocities)
 
@@ -467,13 +481,13 @@ class Program:
 
         futureMotionTransforms = Transform.TransformationFrom(
             Transform.TR(
-                outputs.ReadVector3(self.Actor.GetBoneCount()),
-                outputs.ReadRotation3D(self.Actor.GetBoneCount()),
+                outputs.ReadVector3(self.Actor.Skeleton.Hierarchy.BoneCount),
+                outputs.ReadRotation3D(self.Actor.Skeleton.Hierarchy.BoneCount),
             ),
             futureRootTransforms.reshape(SEQUENCE_LENGTH, 1, 4, 4),
         )
         futureMotionVelocities = Vector3.DirectionFrom(
-            outputs.ReadVector3(self.Actor.GetBoneCount()),
+            outputs.ReadVector3(self.Actor.Skeleton.Hierarchy.BoneCount),
             futureRootTransforms.reshape(SEQUENCE_LENGTH, 1, 4, 4),
         )
 
@@ -488,7 +502,7 @@ class Program:
         )
         self.Sequence.Motion = MotionModule.Series(
             self.ControlSeries,
-            self.Actor.GetBoneNames(),
+            list(self.Actor.Skeleton.Hierarchy.BoneNames),
             futureMotionTransforms,
             futureMotionVelocities,
         )
@@ -496,8 +510,8 @@ class Program:
         # Predict Contacts
         inputs = FeedTensor("X", self.PostProcessor.input_dim())
 
-        currentTransforms = self.Actor.GetTransforms(self.ContactIndices)
-        currentVelocities = self.Actor.GetVelocities(self.ContactIndices)
+        currentTransforms = self.Actor.Skeleton.GetTransforms(self.ContactIndices)
+        currentVelocities = self.Actor.Skeleton.GetVelocities(self.ContactIndices)
         targetTransforms = self.Sequence.Motion.GetTransforms(self.ContactBones)[
             1:, :, :
         ]
@@ -536,7 +550,8 @@ class Program:
 
         requiredSpeed = (
             Vector3.Distance(
-                self.Actor.GetRootPosition(), self.SimulationObject.GetPosition(0)
+                self.Actor.Skeleton.GetRootPosition(),
+                self.SimulationObject.GetPosition(0),
             )
             + self.SimulationObject.GetLength()
         ) / SEQUENCE_WINDOW
@@ -580,22 +595,24 @@ class Program:
             self.Previous.SampleContacts(sdt), self.Sequence.SampleContacts(sdt), blend
         )
 
-        self.Actor.Root = Transform.Interpolate(
-            root, self.Actor.Root, self.Sequence.GetRootLock()
+        self.Actor.Skeleton.Root = Transform.Interpolate(
+            root, self.Actor.Skeleton.Root, self.Sequence.GetRootLock()
         )
 
-        self.Actor.SetTransforms(
+        self.Actor.Skeleton.SetTransforms(
             Transform.TR(
                 Vector3.Lerp(
-                    self.Actor.GetPositions() + velocities * sdt, positions, 0.5
+                    self.Actor.Skeleton.GetPositions() + velocities * sdt,
+                    positions,
+                    0.5,
                 ),
                 rotations,
             )
         )
-        self.Actor.SetVelocities(velocities)
+        self.Actor.Skeleton.SetVelocities(velocities)
 
-        self.Actor.RestoreBoneLengths()
-        self.Actor.RestoreBoneAlignments()
+        self.Actor.Skeleton.RestoreBoneLengths()
+        self.Actor.Skeleton.RestoreBoneAlignments()
 
         self.LeftHandIK.Solve(
             contact=contacts[0],
@@ -682,9 +699,9 @@ class Program:
         if self.DrawGuidanceControl.Active:
             self.GuidanceControl.DrawLegacy(self.Actor)
         if self.DrawPreviousSequence.Active:
-            self.Previous.Draw(self.Actor, AI4Animation.Color.RED)
+            self.Previous.Draw(self.Actor.Skeleton, AI4Animation.Color.RED)
         if self.DrawCurrentSequence.Active:
-            self.Sequence.Draw(self.Actor, AI4Animation.Color.GREEN)
+            self.Sequence.Draw(self.Actor.Skeleton, AI4Animation.Color.GREEN)
 
     def GUI(self):
         self.ButtonDog.Active = self.Character == "dog"

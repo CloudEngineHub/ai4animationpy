@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Scene graph managing entities, camera, and transform hierarchy."""
 
 from ai4animation import AI4Animation, Entity
@@ -10,55 +11,6 @@ class Scene:
         self.Entities = []
         self.Transforms = Transform.Identity(0)
         self.Scales = Vector3.One(0)
-
-    @staticmethod
-    def SetTransforms(entities, transforms):
-        def FK(entity):
-            if entity in dictionary.keys():
-                entity.SetTransform(dictionary[entity], fk=False)
-                dictionary.pop(entity)
-            else:
-                entity.SyncGlobal()
-            for child in entity.Children:
-                FK(child)
-
-        count = 0
-        dictionary = dict(zip(entities, transforms))
-        while len(dictionary) > 0:
-            count += 1
-            FK(list(dictionary)[0])
-        if count > 1:
-            print(
-                "SetTransforms needed to iterate more than once. Consider rearranging the layout of your dictionary."
-            )
-
-    @staticmethod
-    def GetTransforms(entities_or_indices):
-        if isinstance(entities_or_indices, list):
-            if len(entities_or_indices) == 0:
-                return Transform.Identity(0)
-            if isinstance(entities_or_indices[0], int):
-                indices = entities_or_indices
-            if isinstance(entities_or_indices[0], Entity.Entity):
-                indices = [entity.Index for entity in entities_or_indices]
-            return AI4Animation.AI4Animation.Scene.Transforms[indices]
-
-    @staticmethod
-    def GetSkinningTransforms(entities_or_indices):
-        if isinstance(entities_or_indices, list):
-            if len(entities_or_indices) == 0:
-                return Transform.Identity(0)
-            if isinstance(entities_or_indices[0], int):
-                indices = entities_or_indices
-            if isinstance(entities_or_indices[0], Entity.Entity):
-                indices = [entity.Index for entity in entities_or_indices]
-            transforms = AI4Animation.AI4Animation.Scene.Transforms[indices]
-            scales = AI4Animation.AI4Animation.Scene.Scales[indices]
-            return Transform.TRS(
-                Transform.GetPosition(transforms),
-                Transform.GetRotation(transforms),
-                scales,
-            )
 
     def Update(self):
         for entity in self.Entities:

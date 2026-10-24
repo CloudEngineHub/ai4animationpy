@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import builtins
 
 import numpy as np
@@ -582,7 +583,7 @@ def CurvePlot(
             AI4Animation.Color.BLUE,
             AI4Animation.Color.GREEN,
             AI4Animation.Color.ORANGE,
-            AI4Animation.Color.MAGENTA,
+            AI4Animation.Color.PURPLE,
             AI4Animation.Color.BLACK,
         ]
         if colors is None
@@ -693,7 +694,7 @@ def BarPlot(
     backgroundColor=None,
     frameColor=None,
 ):
-    if len(values.shape) > 3:
+    if len(values.shape) > 2:
         print(
             "Drawing bar plot for tensors with more than 2 dimensions is not supported."
         )
@@ -706,13 +707,13 @@ def BarPlot(
     screenRectangle = rectangle.Screen()
 
     backgroundColor = (
-        Utility.Opacity(AI4Animation.Color.WHITE, 0.5)
+        Utility.Opacity(AI4Animation.Color.GRAY, 0.5)
         if backgroundColor is None
         else backgroundColor
     )
     frameColor = AI4Animation.Color.BLACK if frameColor is None else frameColor
     if colors is None:
-        colors = [AI4Animation.Color.BLACK]
+        colors = AI4Animation.Color.WHITE
 
     rl.DrawRectangleRec(screenRectangle.Tuple(), backgroundColor)
 
@@ -724,8 +725,8 @@ def BarPlot(
     row_gap = bar_height * 0.15
     bar_inner_height = bar_height - row_gap
     for row in range(rows):
-        color = colors[row % len(colors)]
         for col in range(cols):
+            color = colors[row][col] if isinstance(colors, list) else colors
             value = values[row, col]
             if min is not None and max is not None:
                 value = _clamp_value(value, min, max)
@@ -777,8 +778,9 @@ def HorizontalPivot(
     else:
         value = Utility.Normalize(value, limits[0], limits[1], 0.0, 1.0)
     frameRectangle = Rectangle(x, y, w, h).Screen()
+    pivot_width = w * thickness
     pivotRectangle = Rectangle(
-        x + value * (w - thickness / 2.0), y, w * thickness, h
+        x + value * (w - pivot_width), y, pivot_width, h
     ).Screen()
     backgroundColor = (
         Utility.Opacity(AI4Animation.Color.WHITE, 0.5)
@@ -801,7 +803,16 @@ def HorizontalPivot(
 
 
 def HorizontalBar(
-    x, y, w, h, value, label=None, limits=None, backgroundColor=None, pivotColor=None
+    x,
+    y,
+    w,
+    h,
+    value,
+    label=None,
+    limits=None,
+    backgroundColor=None,
+    pivotColor=None,
+    labelColor=None,
 ):
     if limits is not None:
         if limits[0] == limits[1]:
@@ -825,6 +836,58 @@ def HorizontalBar(
             x + w / 2.0,
             y + h / 4.0,
             size=h / 2.0,
+            color=AI4Animation.Color.BLACK if labelColor is None else labelColor,
+            pivot=0.5,
+        )
+
+
+def CircularPivot(
+    x,
+    y,
+    w,
+    h,
+    value,
+    label=None,
+    limits=None,
+    thickness=0.15,
+    amplitude=1.0,
+    backgroundColor=None,
+    pivotColor=None,
+):
+    # Draws a circle in normalized screen space with a pivot dot placed on its
+    # circumference at an angle given by value. value is interpreted as a fraction
+    # of a full turn (cycles); pass limits=[min,max] to remap an arbitrary range.
+    # amplitude in [0, 1] scales the pivot vector length (1.0 reaches the rim).
+    if limits is not None:
+        if limits[0] == limits[1]:
+            value = limits[0]
+        else:
+            value = Utility.Normalize(value, limits[0], limits[1], 0.0, 1.0)
+    angle = -2.0 * np.pi * value
+    frame = Rectangle(x, y, w, h).Screen()
+    cx = frame.x + frame.width / 2.0
+    cy = frame.y + frame.height / 2.0
+    radius = builtins.min(frame.width, frame.height) / 2.0
+    length = radius * builtins.max(0.0, builtins.min(1.0, amplitude))
+    backgroundColor = (
+        Utility.Opacity(AI4Animation.Color.WHITE, 0.5)
+        if backgroundColor is None
+        else backgroundColor
+    )
+    pivotColor = AI4Animation.Color.WHITE if pivotColor is None else pivotColor
+    # Screen y grows downward, so negate sin to keep a math-standard orientation.
+    px = cx + length * np.cos(angle)
+    py = cy - length * np.sin(angle)
+    rl.DrawCircle(int(cx), int(cy), radius, backgroundColor)
+    rl.DrawCircleLines(int(cx), int(cy), radius, AI4Animation.Color.BLACK)
+    rl.DrawLine(int(cx), int(cy), int(px), int(py), pivotColor)
+    rl.DrawCircle(int(px), int(py), builtins.max(radius * thickness, 2.0), pivotColor)
+    if label is not None:
+        AI4Animation.Draw.Text(
+            label,
+            x + w / 2.0,
+            y + h + h / 4.0,
+            size=h / 3.0,
             color=AI4Animation.Color.BLACK,
             pivot=0.5,
         )

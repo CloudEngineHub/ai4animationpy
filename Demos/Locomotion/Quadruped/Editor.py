@@ -1,6 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
 
 from ai4animation import (
@@ -9,20 +9,23 @@ from ai4animation import (
     Dataset,
     GuidanceModule,
     MirrorModule,
+    Motion,
     MotionEditor,
     MotionModule,
     RootModule,
-    Transform,
-    Vector3,
     Rotation,
-    Motion
+    Transform,
+    Utility,
+    Vector3,
 )
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Quadruped")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
+
 
 class Program:
     def Start(self):
@@ -52,7 +55,8 @@ class Program:
                 ),
                 lambda x: GuidanceModule(x),
                 lambda x: MirrorModule(
-                    x, Vector3.Axis.ZPositive,
+                    x,
+                    Vector3.Axis.ZPositive,
                 ),
             ],
             operation=lambda x: self.CorrectMotion(x),
@@ -61,7 +65,9 @@ class Program:
         editor.AddComponent(
             MotionEditor,
             self.dataset,
-            Motion.LoadFromNPZ(os.path.join(ASSETS_PATH, "Motions", "D1_008_KAN01_001")).Hierarchy,
+            Motion.LoadFromNPZ(
+                os.path.join(ASSETS_PATH, "Motions", "D1_008_KAN01_001")
+            ).Hierarchy,
             Definitions.FULL_BODY_NAMES,
         )
 
@@ -72,8 +78,17 @@ class Program:
 
     def CorrectMotion(self, motion):
         motion.Frames = Transform.GetMirror(motion.Frames, Vector3.Axis.XPositive)
-        idx = motion.Hierarchy.GetBoneIndex([Definitions.HeadName, Definitions.LeftShoulderName, Definitions.RightShoulderName])
-        motion.Frames[:, idx] = Transform.Multiply(motion.Frames[:, idx], Transform.R(Rotation.Euler(90, 0, 0)))
+        idx = motion.Hierarchy.GetBoneIndices(
+            [
+                Definitions.HeadName,
+                Definitions.LeftShoulderName,
+                Definitions.RightShoulderName,
+            ]
+        )
+        motion.Frames[:, idx] = Transform.Multiply(
+            motion.Frames[:, idx], Transform.R(Rotation.Euler(90, 0, 0))
+        )
+
 
 def main():
     AI4Animation(Program())

@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Lightweight profiler for measuring per-section execution time and cProfile integration."""
 
 import cProfile

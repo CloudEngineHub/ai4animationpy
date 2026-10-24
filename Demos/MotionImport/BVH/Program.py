@@ -1,15 +1,17 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
 import sys
 from pathlib import Path
 
-from ai4animation import Actor, AI4Animation, Motion, Time, Vector3
+from ai4animation import Actor, AI4Animation, Motion, Time, Utility, Vector3
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Geno")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
 
 sys.path.append(Path(__file__).parent)
 
@@ -58,21 +60,21 @@ class Program:
 
     def Update(self):
         bvh_timestamp = Time.TotalTime % self.BVHMotion.TotalTime
-        self.BVHActor.SetTransforms(
+        self.BVHActor.Skeleton.SetTransforms(
             self.BVHMotion.GetBoneTransformations(
                 timestamps=bvh_timestamp,
-                bone_names_or_indices=self.BVHActor.GetBoneNames(),
+                bone_names_or_indices=list(self.BVHActor.Skeleton.Hierarchy.BoneNames),
                 mirrored=self.Mirror,
             )
         )
         self.BVHActor.SyncToScene()
 
         # fbx_timestamp = Time.TotalTime % self.FBXMotion.TotalTime
-        # self.FBXActor.SetTransforms(
+        # self.FBXActor.Skeleton.SetTransforms(
         #     Transform.TransformationFrom(
         #         self.FBXMotion.GetBoneTransformations(
         #             timestamps=fbx_timestamp,
-        #             bone_names_or_indices=self.FBXActor.GetBoneNames(),
+        #             bone_names_or_indices=list(self.FBXActor.Skeleton.Hierarchy.BoneNames),
         #             mirrored=self.Mirror,
         #         ),
         #         Transform.T(Vector3.Create(1, 0, 0))
@@ -81,11 +83,11 @@ class Program:
         # self.FBXActor.SyncToScene()
 
         # npz_timestamp = Time.TotalTime % self.NPZMotion.TotalTime
-        # self.NPZActor.SetTransforms(
+        # self.NPZActor.Skeleton.SetTransforms(
         #     Transform.TransformationFrom(
         #         self.NPZMotion.GetBoneTransformations(
         #             timestamps=npz_timestamp,
-        #             bone_names_or_indices=self.NPZActor.GetBoneNames(),
+        #             bone_names_or_indices=list(self.NPZActor.Skeleton.Hierarchy.BoneNames),
         #             mirrored=self.Mirror,
         #         ),
         #         Transform.T(Vector3.Create(2, 0, 0))
@@ -97,19 +99,26 @@ class Program:
         label_offset = Vector3.Create(0, 1, 0)
         AI4Animation.Draw.Text3D(
             ["BVH"],
-            self.BVHActor.GetBone(Definitions.HipName).GetPosition() + label_offset,
+            self.BVHActor.Skeleton.GetPositions(
+                self.BVHActor.Skeleton.Hierarchy.GetBoneIndices(Definitions.HipName)
+            )
+            + label_offset,
             size=0.025,
             color=AI4Animation.Color.BLACK,
         )
         # AI4Animation.Draw.Text3D(
         #     ["FBX"],
-        #     self.FBXActor.GetBone(Definitions.HipName).GetPosition() + label_offset,
+        #     self.FBXActor.Skeleton.GetPositions(
+        #         self.FBXActor.Skeleton.Hierarchy.GetBoneIndices(Definitions.HipName)
+        #     ) + label_offset,
         #     size=0.025,
         #     color=AI4Animation.Color.BLACK,
         # )
         # AI4Animation.Draw.Text3D(
         #     ["NPZ"],
-        #     self.NPZActor.GetBone(Definitions.HipName).GetPosition() + label_offset,
+        #     self.NPZActor.Skeleton.GetPositions(
+        #         self.NPZActor.Skeleton.Hierarchy.GetBoneIndices(Definitions.HipName)
+        #     ) + label_offset,
         #     size=0.025,
         #     color=AI4Animation.Color.BLACK,
         # )

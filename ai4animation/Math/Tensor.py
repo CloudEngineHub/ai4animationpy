@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Tensor utilities for creating, reshaping, and operating on PyTorch and NumPy tensors."""
 
 from enum import Enum
@@ -49,6 +50,29 @@ def GetBackend(tensor):
     # else:
     # raise TypeError(f"Unsupported tensor type: {type(tensor)}")
     return Backend.NumPy
+
+
+def ToBackend(tensor, backend, reference=None):
+    if backend == Backend.NumPy:
+        if isinstance(tensor, torch.Tensor):
+            tensor = tensor.detach().cpu().numpy()
+        dtype = reference.dtype if isinstance(reference, np.ndarray) else np.float32
+        return np.asarray(tensor, dtype=dtype)
+
+    dtype = reference.dtype if isinstance(reference, torch.Tensor) else torch.float32
+    device = reference.device if isinstance(reference, torch.Tensor) else None
+    tensor = torch.as_tensor(tensor, dtype=dtype, device=device)
+    return ToDevice(tensor) if device is None else tensor
+
+
+def BroadcastShapes(*shapes):
+    return np.broadcast_shapes(*shapes)
+
+
+def BroadcastTo(tensor, shape):
+    if GetBackend(tensor) == Backend.NumPy:
+        return np.broadcast_to(tensor, shape)
+    return torch.broadcast_to(tensor, shape)
 
 
 def ToDevice(tensor):
@@ -223,19 +247,12 @@ def Transpose(tensor, axis1=-1, axis2=-2):
 
 
 def Normalize(tensor):
-    backend = GetBackend(tensor)
-    if backend == Backend.NumPy:
-        n = Norm(tensor)
-        idx = np.where(n == 0.0)
-        n[idx] = 1.0
-        tensor = tensor / n
-        return tensor
-    if backend == Backend.PyTorch:
-        n = Norm(tensor)
-        # idx = torch.where(n == 0.0)
-        # n[idx] = 1.0
-        tensor = tensor / n
-        return tensor
+    norm = Norm(tensor)
+    if GetBackend(tensor) == Backend.NumPy:
+        norm = np.maximum(norm, EPS)
+    else:
+        norm = torch.clamp_min(norm, EPS)
+    return tensor / norm
 
 
 def Norm(tensor, axis=-1, keepDim=True):
@@ -520,7 +537,6 @@ def Gaussian(values, power=1.0, axis=-1, keepDim=True):
     idx = Arange(0, values.shape[-1], 1).astype(np.float32)
     padding = (values.shape[-1] - 1) / 2.0
     weight = Ones(values.shape) * Exp(-((idx - padding) ** 2) / (0.5 * padding) ** 2)
-
 
     weight = SwapAxes(weight, axis, -1)
     values = SwapAxes(values, axis, -1)

@@ -1,18 +1,22 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """FABRIK (Forward And Backward Reaching Inverse Kinematics) solver."""
 
 from typing import List, Optional
 
-from ai4animation.Components.Actor import Actor
+from ai4animation.Animation.Skeleton import Skeleton
 from ai4animation.Math import Tensor, Transform, Vector3
 
 
 class FABRIK:
-    def __init__(self, source: "Actor.Bone", target: "Actor.Bone"):
-        self.Bones: List["Actor.Bone"] = Actor.GetChain(source, target)
+    def __init__(self, skeleton: Skeleton, source_name: str, target_name: str):
+        self.Skeleton = skeleton
+        self.BoneIndices: List[int] = skeleton.Hierarchy.GetChainIndices(
+            source_name, target_name
+        )
         self.Root = None
-        self.Positions = Tensor.Zeros(len(self.Bones), 3)
-        self.Lengths = Tensor.Zeros(len(self.Bones), 1)
+        self.Positions = Tensor.Zeros(len(self.BoneIndices), 3)
+        self.Lengths = Tensor.Zeros(len(self.BoneIndices), 1)
 
     def Solve(
         self,
@@ -43,19 +47,18 @@ class FABRIK:
         self._assign(rotation)
 
     def _prepare(self):
-        self.Root = self.Bones[0].GetTransform().copy()
-        for i in range(len(self.Bones)):
-            self.Positions[i] = Vector3.PositionTo(
-                self.Bones[i].GetPosition(), self.Root
-            )
-            # This should be current length but has issues at the moment...
-            # self.Lengths[i] = self.Bones[i].GetDefaultLength()
-            self.Lengths[i] = self.Bones[i].GetCurrentLength()
+        self.Root = self.Skeleton.GetTransforms(self.BoneIndices[0]).copy()
+        self.Positions = Vector3.PositionTo(
+            self.Skeleton.GetPositions(self.BoneIndices), self.Root
+        )
+        self.Lengths = self.Skeleton.GetCurrentBoneLengths(self.BoneIndices).reshape(
+            -1, 1
+        )
 
     def _backward_pass(self, target):
         # Set end effector to target
-        for i in range(len(self.Bones) - 1, 0, -1):
-            if i == len(self.Bones) - 1:
+        for i in range(len(self.BoneIndices) - 1, 0, -1):
+            if i == len(self.BoneIndices) - 1:
                 self.Positions[i] = target
             else:
                 self.Positions[i] = self.Positions[i + 1] + self.Lengths[
@@ -64,7 +67,7 @@ class FABRIK:
 
     def _forward_pass(self):
         # Keep root position fixed
-        for i in range(1, len(self.Bones)):
+        for i in range(1, len(self.BoneIndices)):
             self.Positions[i] = self.Positions[i - 1] + self.Lengths[
                 i
             ] * Vector3.Normalize(self.Positions[i] - self.Positions[i - 1])
@@ -85,7 +88,7 @@ class FABRIK:
             return
         pole_proj = pole_proj / pole_proj_len
 
-        for i in range(1, len(self.Bones) - 1):
+        for i in range(1, len(self.BoneIndices) - 1):
             joint_rel = self.Positions[i] - root_pos
             # Project joint onto the plane perpendicular to the chain axis
             joint_proj = joint_rel - Vector3.Dot(joint_rel, chain_dir) * chain_dir
@@ -111,33 +114,37 @@ class FABRIK:
 
     def _assign(self, target_rotation):
         if target_rotation is None:
-            target_rotation = self.LastBone().GetRotation()
+            target_rotation = self.Skeleton.GetRotations(self.LastBoneIndex())
 
-        for i, bone in enumerate(self.Bones[:-1]):
+        for i, bone_index in enumerate(self.BoneIndices[:-1]):
+            child_index = self.BoneIndices[i + 1]
             pos = Vector3.PositionFrom(self.Positions[i], self.Root)
-            rot = bone.GetRotation()
+            rot = self.Skeleton.GetRotations(bone_index)
             space = Transform.TR(pos, rot)
-            bone.SetPositionAndRotation(
+            self.Skeleton.SetPositionsAndRotations(
                 pos,
-                bone.ComputeAlignment(
+                Skeleton.ComputeAlignment(
                     space,
                     Vector3.PositionFrom(
-                        Transform.GetPosition(self.Bones[i + 1].ZeroTransform), space
+                        Transform.GetPosition(
+                            self.Skeleton.ZeroTransforms[child_index]
+                        ),
+                        space,
                     ),
                     Vector3.PositionFrom(self.Positions[i + 1], self.Root),
                 ),
+                bone_index,
                 FK=True,
             )
-        self.Bones[-1].SetPositionAndRotation(
+        self.Skeleton.SetPositionsAndRotations(
             Vector3.PositionFrom(self.Positions[-1], self.Root),
             target_rotation,
+            self.BoneIndices[-1],
             FK=True,
         )
-        # for bone in self.Bones:
-        #     bone.RestoreAlignment()
 
-    def FirstBone(self) -> Optional["Actor.Bone"]:
-        return self.Bones[0] if self.Bones else None
+    def FirstBoneIndex(self) -> Optional[int]:
+        return self.BoneIndices[0] if self.BoneIndices else None
 
-    def LastBone(self) -> Optional["Actor.Bone"]:
-        return self.Bones[-1] if self.Bones else None
+    def LastBoneIndex(self) -> Optional[int]:
+        return self.BoneIndices[-1] if self.BoneIndices else None

@@ -1,15 +1,17 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
 import sys
 from pathlib import Path
 
-from ai4animation import Actor, AI4Animation, Motion, RootModule, Time, Vector3
+from ai4animation import Actor, AI4Animation, Motion, RootModule, Time, Utility, Vector3
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Geno")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
 
 sys.path.append(Path(__file__).parent)
 
@@ -45,13 +47,13 @@ class Program:
         self.Pose = self.Motion.GetBoneTransformations(
             timestamps=timestamp, mirrored=self.Mirror
         )
-        self.Actor.SetRoot(
+        self.Actor.Skeleton.SetRoot(
             self.RootModule.GetTransforms(timestamps=timestamp, mirrored=self.Mirror)
         )
-        self.Actor.SetTransforms(
+        self.Actor.Skeleton.SetTransforms(
             self.Motion.GetBoneTransformations(
                 timestamps=timestamp,
-                bone_names_or_indices=self.Actor.GetBoneNames(),
+                bone_names_or_indices=list(self.Actor.Skeleton.Hierarchy.BoneNames),
                 mirrored=self.Mirror,
             )
         )

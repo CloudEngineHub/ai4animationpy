@@ -1,9 +1,14 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import pyray as pr
 import raylib as rl
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Components.Component import Component
 from ai4animation.Math import Rotation, Transform, Vector3
+
+
+def LimitBlend(blend):
+    return max(0.0, min(blend, 1.0))
 
 
 class Camera(Component):
@@ -84,6 +89,7 @@ class Camera(Component):
                 )
                 target = self.Target.GetPosition() + Vector3.Create(0, targetHeight, 0)
 
+        blend = LimitBlend(blend)
         position = (1 - blend) * oldPosition + blend * position
         target = (1 - blend) * oldTarget + blend * target
 

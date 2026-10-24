@@ -1,18 +1,24 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-from ai4animation import FABRIK, Rotation, Vector3
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
+from typing import TYPE_CHECKING
+
+from ai4animation import Rotation, Vector3
+
+if TYPE_CHECKING:
+    from ai4animation.IK.FABRIK import FABRIK
 
 
 class LegIK:
-    def __init__(self, ik: FABRIK):
+    def __init__(self, ik: "FABRIK"):
         self.IK = ik
-        ee_pos = ik.LastBone().GetPosition().copy()
+        ee_pos = ik.Skeleton.GetPositions(ik.LastBoneIndex()).copy()
         self.EEBaseline: float = ee_pos[..., 1]
 
         self.TargetPosition = Vector3.Create(0, 0, 0)
         self.TargetRotation = Rotation.Euler(0, 0, 0)
 
-        self.TargetPosition = self.IK.LastBone().GetPosition()
-        self.TargetRotation = self.IK.LastBone().GetRotation()
+        self.TargetPosition = self.IK.Skeleton.GetPositions(self.IK.LastBoneIndex())
+        self.TargetRotation = self.IK.Skeleton.GetRotations(self.IK.LastBoneIndex())
 
     def Solve(
         self,
@@ -21,9 +27,11 @@ class LegIK:
         maxAccuracy: float,
     ):
         self.TargetPosition = Vector3.Lerp(
-            self.IK.LastBone().GetPosition(), self.TargetPosition, contact
+            self.IK.Skeleton.GetPositions(self.IK.LastBoneIndex()),
+            self.TargetPosition,
+            contact,
         )
-        self.TargetRotation = self.IK.LastBone().GetRotation()
+        self.TargetRotation = self.IK.Skeleton.GetRotations(self.IK.LastBoneIndex())
         self.IK.Solve(
             self.TargetPosition,
             self.TargetRotation,

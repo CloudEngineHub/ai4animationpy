@@ -1,11 +1,12 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
 import re
 
 import numpy as np
 from ai4animation.Animation.Hierarchy import Hierarchy
 from ai4animation.Animation.Motion import Motion
-from ai4animation.Math import Rotation, Tensor, Transform, Vector3
+from ai4animation.Math import Rotation, Tensor, Transform
 
 channelmap = {"Xrotation": "x", "Yrotation": "y", "Zrotation": "z"}
 

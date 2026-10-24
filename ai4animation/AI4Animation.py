@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Core application class managing the update loop, rendering, and module loading."""
 
 import os
@@ -7,6 +8,7 @@ import time
 from enum import Enum
 
 from ai4animation import Scene, Time, Utility
+from ai4animation.Profiler import Profiler as RuntimeProfiler
 
 
 class AI4Animation:
@@ -45,7 +47,7 @@ class AI4Animation:
         AI4Animation.RunMode = (
             mode if mode is not None else AI4Animation.DetermineRunMode()
         )
-        AI4Animation.Profiler = profiler
+        AI4Animation.Profiler = RuntimeProfiler() if profiler is True else profiler
 
         AI4Animation.Standalone = None
         AI4Animation.Scene = Scene.Scene()
@@ -105,12 +107,14 @@ class AI4Animation:
 
     @staticmethod
     def __DRAW__():
+        # Refactor depth rendering
         if AI4Animation.Standalone is not None:
             AI4Animation.Draw.SetDepthRendering(False)
             AI4Animation.Scene.Draw()
             if hasattr(AI4Animation.Program, "Draw"):
                 AI4Animation.Program.Draw()
             AI4Animation.Draw.SetDepthRendering(True)
+
     @staticmethod
     def __GUI__():
         if AI4Animation.Standalone is not None:

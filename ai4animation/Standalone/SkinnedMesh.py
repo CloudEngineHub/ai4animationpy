@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 from array import array
 from io import BytesIO
 
@@ -250,7 +251,7 @@ class SkinnedMesh:
             for i, name in enumerate(model.JointNames)
             if name in actor.NameToEntity
         ]
-        self._model_idx  = np.array([p[0] for p in valid], dtype=np.int32)
+        self._model_idx = np.array([p[0] for p in valid], dtype=np.int32)
         self._entity_idx = np.array([p[1] for p in valid], dtype=np.int32)
 
         print(

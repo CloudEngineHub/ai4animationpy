@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import math
 
 from ai4animation import AI4Animation, Utility
@@ -69,11 +70,11 @@ class Sequence:
     def GetLength(self):
         return self.Trajectory.GetLength()
 
-    def Draw(self, actor, color=None):
+    def Draw(self, skeleton, color=None):
         for i in range(self.Timestamps.size):
             AI4Animation.Draw.Skeleton(
                 self.Trajectory.Transforms[i],
                 Transform.GetPosition(self.Motion.Transforms[i]),
-                actor,
+                skeleton,
                 color=color,
             )

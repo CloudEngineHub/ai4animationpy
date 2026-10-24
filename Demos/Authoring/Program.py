@@ -1,13 +1,8 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import math
 
-from ai4animation import (
-    AI4Animation,
-    Tensor,
-    Time,
-    Transform,
-    Vector3,
-)
+from ai4animation import AI4Animation, Tensor, Time, Transform, Vector3
 from MotionController import MotionController
 from PathPlanner3D import PathPlanner3D
 
@@ -68,9 +63,9 @@ class AuthoringProgram:
         start = self.StartPoint.GetPosition().copy()
         start[1] = 0.0
         root = Transform.TR(
-            start, Transform.GetRotation(self.MotionController.Actor.Root)
+            start, Transform.GetRotation(self.MotionController.Actor.Skeleton.Root)
         )
-        self.MotionController.Actor.SetRoot(root)
+        self.MotionController.Actor.Skeleton.SetRoot(root)
         self.MotionController.Actor.Entity.SetPosition(start)
         for series in (
             self.MotionController.SimulationObject,
@@ -120,7 +115,11 @@ class AuthoringProgram:
 
         self.GoalTransform = goal
         self.MotionController.Update(
-            goal, CONTROL_STRENGTH, self.GuidancePose, Time.DeltaTime, self.PredictionFPS
+            goal,
+            CONTROL_STRENGTH,
+            self.GuidancePose,
+            Time.DeltaTime,
+            self.PredictionFPS,
         )
 
     def Standalone(self):
@@ -193,10 +192,10 @@ class AuthoringProgram:
             and self.MotionController.Sequence is not None
         ):
             self.MotionController.Previous.Draw(
-                self.MotionController.Actor, AI4Animation.Color.RED
+                self.MotionController.Actor.Skeleton, AI4Animation.Color.RED
             )
             self.MotionController.Sequence.Draw(
-                self.MotionController.Actor, AI4Animation.Color.GREEN
+                self.MotionController.Actor.Skeleton, AI4Animation.Color.GREEN
             )
 
         self.Planner.Draw(
@@ -225,8 +224,11 @@ class AuthoringProgram:
 
     def GUI(self):
         self.Panel.GUI()
-        self.StartPoint.DrawHandle()
-        self.GoalPoint.DrawHandle()
+        for point in (self.StartPoint, self.GoalPoint):
+            point.DrawHandle()
+            position = point.GetPosition().copy()
+            position[1] = 0.0
+            point.SetPosition(position)
 
         self.GuidanceDropdown.Button.Label = f"Style: {self.SelectedGuidanceName}"
         self.GuidanceDropdown.GUI()

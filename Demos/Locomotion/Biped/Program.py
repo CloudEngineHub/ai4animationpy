@@ -1,6 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -10,12 +10,9 @@ import torch
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Geno")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
 from ai4animation import (
     Actor,
     AI4Animation,
-    FABRIK,
     FeedTensor,
     GuidanceModule,
     MotionModule,
@@ -26,7 +23,12 @@ from ai4animation import (
     Time,
     TimeSeries,
     Transform,
+    Utility,
     Vector3,
+)
+
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
 )
 from LegIK import LegIK
 from Sequence import Sequence
@@ -41,6 +43,7 @@ SEQUENCE_FPS = 30
 PREDICTION_FPS = 10
 CONTACT_POWER = 3.0
 
+
 # The locomotion system was trained on the Style100 dataset.
 class Program:
     def Start(self):
@@ -53,12 +56,12 @@ class Program:
         AI4Animation.Standalone.Camera.SetTarget(self.Actor.Entity)
 
         self.Model = torch.load(
-            os.path.join(SCRIPT_DIR, "Models/Network.pt"), weights_only=False
+            os.path.join(SCRIPT_DIR, "Network.pt"), weights_only=False
         )
         self.Model.eval()
 
         self.PostProcessor = torch.load(
-            os.path.join(SCRIPT_DIR, "Models/PostProcessor.pt"), weights_only=False
+            os.path.join(SCRIPT_DIR, "PostProcessor.pt"), weights_only=False
         )
         self.PostProcessor.eval()
 
@@ -77,7 +80,9 @@ class Program:
 
         self.RootControl = RootModule.Series(self.ControlSeries)
         self.GuidanceControl = GuidanceModule.Guidance(
-            "Guidance", self.Actor.GetBoneNames(), self.Actor.GetPositions().copy()
+            "Guidance",
+            list(self.Actor.Skeleton.Hierarchy.BoneNames),
+            self.Actor.Skeleton.GetPositions().copy(),
         )
         self.GuidanceTemplates = {}
         directory = "Guidances"
@@ -108,27 +113,29 @@ class Program:
             Definitions.RightAnkleName,
             Definitions.RightBallName,
         ]
-        self.ContactIndices = self.Actor.GetBoneIndices(self.ContactBones)
+        self.ContactIndices = self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+            self.ContactBones
+        )
 
         self.LeftLegIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.LeftHipName),
-                self.Actor.GetBone(Definitions.LeftAnkleName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.LeftHipName,
+                Definitions.LeftAnkleName,
             ),
-            FABRIK(
-                self.Actor.GetBone(Definitions.LeftAnkleName),
-                self.Actor.GetBone(Definitions.LeftBallName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.LeftAnkleName,
+                Definitions.LeftBallName,
             ),
         )
 
         self.RightLegIK: LegIK = LegIK(
-            FABRIK(
-                self.Actor.GetBone(Definitions.RightHipName),
-                self.Actor.GetBone(Definitions.RightAnkleName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.RightHipName,
+                Definitions.RightAnkleName,
             ),
-            FABRIK(
-                self.Actor.GetBone(Definitions.RightAnkleName),
-                self.Actor.GetBone(Definitions.RightBallName),
+            self.Actor.Skeleton.CreateIK(
+                Definitions.RightAnkleName,
+                Definitions.RightBallName,
             ),
         )
 
@@ -218,7 +225,7 @@ class Program:
 
         position = Vector3.Lerp(
             self.SimulationObject.GetPosition(0),
-            self.Actor.GetRootPosition(),
+            self.Actor.Skeleton.GetRootPosition(),
             self.Synchronization,
         )
 
@@ -240,7 +247,7 @@ class Program:
             )
             for i in range(self.RootControl.SampleCount):
                 target = Transform.GetPosition(self.RootControl.Transforms)[i:]
-                current = self.Actor.GetRootPosition().reshape(-1, 3)
+                current = self.Actor.Skeleton.GetRootPosition().reshape(-1, 3)
                 time = self.RootControl.Timestamps[i:].reshape(-1, 1)
                 self.RootControl.Velocities[i] = Tensor.Sum(
                     target - current, axis=0, keepDim=False
@@ -254,10 +261,12 @@ class Program:
     def Predict(self):
         inputs = FeedTensor("X", self.Model.input_dim())
 
-        root = self.Actor.Root
+        root = self.Actor.Skeleton.Root
 
-        transforms = Transform.TransformationTo(self.Actor.GetTransforms(), root)
-        velocities = Vector3.DirectionTo(self.Actor.GetVelocities(), root)
+        transforms = Transform.TransformationTo(
+            self.Actor.Skeleton.GetTransforms(), root
+        )
+        velocities = Vector3.DirectionTo(self.Actor.Skeleton.GetVelocities(), root)
         inputs.Feed(Transform.GetPosition(transforms))
         inputs.Feed(Transform.GetAxisZ(transforms))
         inputs.Feed(Transform.GetAxisY(transforms))
@@ -302,13 +311,13 @@ class Program:
 
         futureMotionTransforms = Transform.TransformationFrom(
             Transform.TR(
-                outputs.ReadVector3(self.Actor.GetBoneCount()),
-                outputs.ReadRotation3D(self.Actor.GetBoneCount()),
+                outputs.ReadVector3(self.Actor.Skeleton.Hierarchy.BoneCount),
+                outputs.ReadRotation3D(self.Actor.Skeleton.Hierarchy.BoneCount),
             ),
             futureRootTransforms.reshape(SEQUENCE_LENGTH, 1, 4, 4),
         )
         futureMotionVelocities = Vector3.DirectionFrom(
-            outputs.ReadVector3(self.Actor.GetBoneCount()),
+            outputs.ReadVector3(self.Actor.Skeleton.Hierarchy.BoneCount),
             futureRootTransforms.reshape(SEQUENCE_LENGTH, 1, 4, 4),
         )
 
@@ -323,7 +332,7 @@ class Program:
         )
         self.Sequence.Motion = MotionModule.Series(
             self.ControlSeries,
-            self.Actor.GetBoneNames(),
+            list(self.Actor.Skeleton.Hierarchy.BoneNames),
             futureMotionTransforms,
             futureMotionVelocities,
         )
@@ -331,8 +340,8 @@ class Program:
         # Predict Contacts
         inputs = FeedTensor("X", self.PostProcessor.input_dim())
 
-        currentTransforms = self.Actor.GetTransforms(self.ContactIndices)
-        currentVelocities = self.Actor.GetVelocities(self.ContactIndices)
+        currentTransforms = self.Actor.Skeleton.GetTransforms(self.ContactIndices)
+        currentVelocities = self.Actor.Skeleton.GetVelocities(self.ContactIndices)
         targetTransforms = self.Sequence.Motion.GetTransforms(self.ContactBones)[
             1:, :, :
         ]
@@ -362,16 +371,15 @@ class Program:
                 SEQUENCE_LENGTH, len(self.ContactBones)
             )
         )
-        self.Sequence.Contacts = Tensor.Pow(
-            Tensor.Clamp(contacts, 0, 1), CONTACT_POWER
-        )
+        self.Sequence.Contacts = Tensor.Pow(Tensor.Clamp(contacts, 0, 1), CONTACT_POWER)
 
     def Animate(self):
         dt = Time.DeltaTime
 
         requiredSpeed = (
             Vector3.Distance(
-                self.Actor.GetRootPosition(), self.SimulationObject.GetPosition(0)
+                self.Actor.Skeleton.GetRootPosition(),
+                self.SimulationObject.GetPosition(0),
             )
             + self.SimulationObject.GetLength()
         ) / SEQUENCE_WINDOW
@@ -385,7 +393,7 @@ class Program:
         self.Timescale = Tensor.InterpolateDt(
             self.Timescale, ts, dt, TIMESCALE_SENSITIVITY
         )
-        self.Timescale = Tensor.Clamp(self.Timescale, MIN_TIMESCALE, MAX_TIMESCALE).item()
+        self.Timescale = Tensor.Clamp(self.Timescale, MIN_TIMESCALE, MAX_TIMESCALE)
         self.Synchronization = Tensor.InterpolateDt(
             self.Synchronization, sync, dt, SYNCHRONIZATION_SENSITIVITY
         )
@@ -415,21 +423,23 @@ class Program:
             self.Previous.SampleContacts(sdt), self.Sequence.SampleContacts(sdt), blend
         )
 
-        self.Actor.Root = Transform.Interpolate(
-            root, self.Actor.Root, self.Sequence.GetRootLock()
+        self.Actor.Skeleton.Root = Transform.Interpolate(
+            root, self.Actor.Skeleton.Root, self.Sequence.GetRootLock()
         )
-        self.Actor.SetTransforms(
+        self.Actor.Skeleton.SetTransforms(
             Transform.TR(
                 Vector3.Lerp(
-                    self.Actor.GetPositions() + velocities * sdt, positions, 0.5
+                    self.Actor.Skeleton.GetPositions() + velocities * sdt,
+                    positions,
+                    0.5,
                 ),
                 rotations,
             )
         )
-        self.Actor.SetVelocities(velocities)
+        self.Actor.Skeleton.SetVelocities(velocities)
 
-        self.Actor.RestoreBoneLengths()
-        self.Actor.RestoreBoneAlignments()
+        self.Actor.Skeleton.RestoreBoneLengths()
+        self.Actor.Skeleton.RestoreBoneAlignments()
 
         self.LeftLegIK.Solve(
             ankleContact=contacts[0],
@@ -438,7 +448,11 @@ class Program:
             maxAccuracy=self.SolverAccuracy,
             poleTarget=Vector3.PositionFrom(
                 Vector3.Create(0.0, 0.0, 1.0),
-                self.Actor.GetBone(Definitions.LeftKneeName).GetTransform(),
+                self.Actor.Skeleton.GetTransforms(
+                    self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+                        Definitions.LeftKneeName
+                    )
+                ),
             ),
             poleWeight=1.0,
         )
@@ -449,7 +463,11 @@ class Program:
             maxAccuracy=self.SolverAccuracy,
             poleTarget=Vector3.PositionFrom(
                 Vector3.Create(0.0, 0.0, 1.0),
-                self.Actor.GetBone(Definitions.RightKneeName).GetTransform(),
+                self.Actor.Skeleton.GetTransforms(
+                    self.Actor.Skeleton.Hierarchy.GetBoneIndices(
+                        Definitions.RightKneeName
+                    )
+                ),
             ),
             poleWeight=1.0,
         )
@@ -493,9 +511,9 @@ class Program:
         if self.DrawGuidanceControl.Active:
             self.GuidanceControl.DrawLegacy(self.Actor)
         if self.DrawPreviousSequence.Active:
-            self.Previous.Draw(self.Actor, AI4Animation.Color.RED)
+            self.Previous.Draw(self.Actor.Skeleton, AI4Animation.Color.RED)
         if self.DrawCurrentSequence.Active:
-            self.Sequence.Draw(self.Actor, AI4Animation.Color.GREEN)
+            self.Sequence.Draw(self.Actor.Skeleton, AI4Animation.Color.GREEN)
 
     def GUI(self):
         if AI4Animation.Standalone.IO.GamepadAvailable():

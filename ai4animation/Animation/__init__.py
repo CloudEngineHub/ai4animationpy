@@ -1,6 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 from . import (
-    AudioModule,
     ContactModule,
     Dataset,
     GuidanceModule,
@@ -9,20 +9,19 @@ from . import (
     Motion,
     MotionModule,
     RootModule,
+    Skeleton,
     TimeSeries,
-    TrackingModule,
 )
 
 __all__ = [
     "Hierarchy",
     "Motion",
+    "Skeleton",
     "TimeSeries",
     "Module",
     "RootModule",
     "MotionModule",
     "ContactModule",
     "GuidanceModule",
-    "TrackingModule",
-    "AudioModule",
     "Dataset",
 ]

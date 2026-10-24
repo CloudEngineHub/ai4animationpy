@@ -1,6 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
 
 import torch
@@ -28,8 +28,9 @@ from ai4animation import (
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Cranberry")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
 
 EPOCH_COUNT = 150
 BATCH_SIZE = 32
@@ -257,8 +258,8 @@ class Program:
                 root,
             )
 
-            self.Simulated.Root = root
-            self.Simulated.SetTransforms(pose)
+            self.Simulated.Skeleton.Root = root
+            self.Simulated.Skeleton.SetTransforms(pose)
             self.Simulated.SyncToScene()
 
         self.Network.train()

@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import math
 
 import raylib as rl
@@ -80,21 +81,20 @@ def Line(start, end, color=BLACK):
         rl.DrawLine3D(start_pos, end_pos, color)
 
 
-def LineStrip(positions, color=BLACK):
-    if positions.shape[0] < 2:
+def LineStrip(position, color=BLACK):
+    if position.shape[0] < 2:
         return
-    positions_list = positions.tolist()
-    for i in range(1, positions.shape[0]):
-        rl.DrawLine3D(positions_list[i - 1], positions_list[i], color)
+    position_list = position.tolist()
+    for i in range(1, position.shape[0]):
+        rl.DrawLine3D(position_list[i - 1], position_list[i], color)
 
 
 def Plane(position, size, color=BLACK):
     if position.shape[0] == 0:
         return
-    position_list = position.tolist()
-    size_list = size.tolist()
+    position_list = position.reshape(-1, 3).tolist()
     for pos in position_list:
-        rl.DrawPlane(pos, size_list, color)
+        rl.DrawPlane(pos, (size, size), color)
 
 
 def Cylinder(start, end, startSize, endSize, resolution=10, color=BLACK):
@@ -179,9 +179,9 @@ def Text3D(text, position, size=1.0, color=WHITE):
         Text(text[i], x, y, size, color)
 
 
-def Skeleton(root, positions, actor, bones=None, size: float = 1.0, color=None):
-    parent_positions = positions[actor.GetParentIndices(bones)]
-    bone_positions = positions[actor.GetBoneIndices(bones)]
+def Skeleton(root, positions, skeleton, bones=None, size: float = 1.0, color=None):
+    parent_positions = positions[skeleton.Hierarchy.GetParentIndices(bones)]
+    bone_positions = positions[skeleton.Hierarchy.GetBoneIndices(bones)]
     color = AI4Animation.Color.BLACK if color is None else color
     if root is not None:
         Transform(root, 0.5)

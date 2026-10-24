@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Synthetic data generators for testing generative models."""
 
 import torch
@@ -83,15 +84,25 @@ def GradientAmbiguousSineFunctions(samples, resolution, min=0.0, max=1.0):
     return X, Y
 
 
+def OneMoon(samples, noise):
+    X, Y = make_moons(n_samples=2 * samples, noise=noise)
+    X = X[Y == 0]
+    Y = Y[Y == 0]
+    X = torch.from_numpy(X).to(torch.float32)
+    Y = torch.from_numpy(Y).to(torch.float32)
+    return X, Y
+
+
 def TwoMoons(samples, noise):
     X, Y = make_moons(n_samples=samples, noise=noise)
     X = torch.from_numpy(X).to(torch.float32)
     Y = torch.from_numpy(Y).to(torch.float32)
     return X, Y
 
+
 def FourMoons(samples, noise):
-    X1, Y1 = make_moons(n_samples=int(samples/2), noise=noise)
-    X2, Y2 = make_moons(n_samples=int(samples/2), noise=noise)
+    X1, Y1 = make_moons(n_samples=int(samples / 2), noise=noise)
+    X2, Y2 = make_moons(n_samples=int(samples / 2), noise=noise)
     v = X2.copy()
     X2[..., 0] = v[..., 1] + 0.25
     X2[..., 1] = v[..., 0]

@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Quaternion creation, multiplication, and conversion utilities."""
 
 from ai4animation.Math import Tensor, Vector3
@@ -103,7 +104,7 @@ def ToMatrix(q):
     # Storage layout is [x, y, z, w]; unpack as (w, x, y, z).
     q0, q1, q2, q3 = q[..., 3], q[..., 0], q[..., 1], q[..., 2]
 
-    R = Tensor.Zeros(list(q.shape)[:-1] + [3, 3])
+    R = Tensor.Zeros(list(q.shape)[:-1] + [3, 3], backend=Tensor.GetBackend(q))
 
     # First row
     R[..., 0, 0] = 2 * (q0**2 + q1**2) - 1
@@ -209,24 +210,39 @@ def FromTo(u, v):
     u = u / Vector3.Length(u)
     v = v / Vector3.Length(v)
 
-    dot_product = Vector3.Dot(u, v)
+    dot_product = Tensor.Clamp(Vector3.Dot(u, v), -1.0, 1.0)
     cross_product = Vector3.Cross(u, v)
+    quaternion = Tensor.Stack(
+        (
+            cross_product[..., 0],
+            cross_product[..., 1],
+            cross_product[..., 2],
+            1.0 + dot_product,
+        ),
+        -1,
+    )
 
-    # Handle the case of parallel or anti-parallel vectors
-    import numpy as np
-
-    if dot_product == -1:  # 180-degree rotation (anti-parallel)
-        print("UNHANDLED CASE")
-        # Find an arbitrary orthogonal vector to u for the axis of rotation
-        arbitrary_axis = Vector3.Create(1, 0, 0)
-        if np.allclose(u, arbitrary_axis):
-            arbitrary_axis = np.array([0, 1, 0])
-        rotation_axis = np.cross(u, arbitrary_axis)
-        rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
-        quaternion = np.array([0, rotation_axis[0], rotation_axis[1], rotation_axis[2]])
-    else:
-        w = Tensor.Sqrt(Tensor.Div(Tensor.Add(dot_product, 1), 2))
-        xyz = cross_product / (2 * w)
-        quaternion = Create(xyz[0], xyz[1], xyz[2], w)
-
-    return Normalize(quaternion)  # Ensure unit quaternion
+    x_axis = Tensor.ZerosLike(u)
+    x_axis[..., 0] = 1.0
+    y_axis = Tensor.ZerosLike(u)
+    y_axis[..., 1] = 1.0
+    rotation_axis = Vector3.Cross(u, x_axis)
+    rotation_axis = Tensor.Where(
+        Vector3.Length(rotation_axis) > 1e-8,
+        rotation_axis,
+        Vector3.Cross(u, y_axis),
+    )
+    rotation_axis = Vector3.Normalize(rotation_axis)
+    anti_parallel = Tensor.Stack(
+        (
+            rotation_axis[..., 0],
+            rotation_axis[..., 1],
+            rotation_axis[..., 2],
+            Tensor.ZerosLike(dot_product),
+        ),
+        -1,
+    )
+    quaternion = Tensor.Where(
+        (dot_product < -1.0 + 1e-6)[..., None], anti_parallel, quaternion
+    )
+    return Normalize(quaternion)

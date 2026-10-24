@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 from enum import Enum
 
 import numpy as np
@@ -39,7 +40,7 @@ class MirrorModule(Module):
                 correctives[i] = Rotation.Euler(correction)
 
         for k, v in overrides.items():
-            correctives[self.Motion.Hierarchy.GetBoneIndex([k])] = Rotation.Euler(v)
+            correctives[self.Motion.Hierarchy.GetBoneIndices([k])] = Rotation.Euler(v)
         self.Delta = Transform.R(correctives[self.Symmetry]).reshape(1, -1, 4, 4)
 
     def Initialize(self):
@@ -62,23 +63,23 @@ class MirrorModule(Module):
 
     def Draw(self, editor):
         if Module.Visualize[MirrorModule]:
-            names = editor.Actor.GetBoneNames()
+            names = list(editor.Actor.Skeleton.Hierarchy.BoneNames)
             positions = self.Motion.GetBonePositions(
                 editor.Timestamp,
-                self.Motion.GetBoneIndices(names),
+                self.Motion.Hierarchy.GetBoneIndices(names),
                 True,
             ).reshape(-1, 3)
             AI4Animation.Draw.Skeleton(
-                None, positions, editor.Actor, bones=names, size=2.0
+                None, positions, editor.Actor.Skeleton, bones=names, size=2.0
             )
 
             # if self.Actor is None:
             #     self.Actor = editor.Actor.CreateCopy()
-            # self.Actor.SetTransforms(
+            # self.Actor.Skeleton.SetTransforms(
             #     self.GetBoneTransformations(
             #         self.Motion.GetFrameIndices(editor.Timestamp),
-            #         self.Motion.GetBoneIndices(
-            #             self.Actor.GetBoneNames(),
+            #         self.Motion.Hierarchy.GetBoneIndices(
+            #             list(self.Actor.Skeleton.Hierarchy.BoneNames),
             #         ),
             #     )
             # )

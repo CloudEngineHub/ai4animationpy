@@ -1,10 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-from . import Physics
-from . import Audio
-from .AudioPlayer import AudioPlayer
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-__all__ = [
-    "Physics",
-    "Audio",
-    "AudioPlayer",
-]
+from . import Physics
+
+__all__ = ["Physics"]

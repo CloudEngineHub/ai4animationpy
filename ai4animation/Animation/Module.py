@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Abstract base class for animation modules."""
 
 import logging
@@ -27,7 +28,7 @@ class Module(ABC):
                 "Standalone initialization skipped for %s", type(self).__name__
             )
 
-    def Initialize(self):
+    def Initialize(self):  # noqa: B027
         pass
 
     def GetName(self) -> str:
@@ -45,9 +46,6 @@ class Module(ABC):
 
     def Draw(self, editor) -> None:
         """Called every frame to render module visuals."""
-
-    def Shutdown(self) -> None:
-        """Called when the motion is unloaded (e.g. editor switches clips)."""
 
     def ToggleVisualize(self) -> None:
         """Toggle the visualization state for this module type."""

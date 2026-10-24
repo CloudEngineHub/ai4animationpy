@@ -1,11 +1,12 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """ai4animation: A Python library for neural character animation."""
 
 __version__ = "1.0.0"
 
 # Subpackages (import modules/packages, not classes yet to avoid circular imports)
 # Core utility modules (no dependencies on other package modules)
-from . import AI, Animation, Components, Core, IK, Import, Math, Time, Utility
+from . import AI, Animation, Components, IK, Import, Math, Time, Utility
 
 # AI modules
 from .AI import DataSampler, FeedTensor, Generators, Plotting, ReadTensor
@@ -14,8 +15,11 @@ from .AI.Library.Statistics import RunningStatistics
 from .AI.Models import (
     Autoencoder,
     CategoricalEncoderDecoder,
+    CodebookMatching,
     CxM,
     MultiLayerPerceptron,
+    PeriodicAutoencoder,
+    QuantizedAutoencoder,
     SequentialMLP,
 )
 from .AI.Optimizers.AdamWR import AdamW, CyclicScheduler
@@ -23,7 +27,6 @@ from .AI.Optimizers.CosineAnnealingOptimizer import CosineAnnealingOptimizer
 
 # Core classes (imported after subpackages to avoid circular dependencies)
 from .AI4Animation import AI4Animation
-from .Animation.AudioModule import AudioModule
 from .Animation.ContactModule import ContactModule
 from .Animation.Dataset import Dataset
 from .Animation.GuidanceModule import GuidanceModule
@@ -36,8 +39,8 @@ from .Animation.Motion import Motion
 from .Animation.MotionModule import MotionModule
 from .Animation.PID import PID
 from .Animation.RootModule import RootModule
+from .Animation.Skeleton import Skeleton
 from .Animation.TimeSeries import TimeSeries
-from .Animation.TrackingModule import TrackingModule
 from .AssetManager import AssetManager
 
 # Component classes
@@ -46,16 +49,9 @@ from .Components.Component import Component
 from .Components.MeshRenderer import MeshRenderer
 from .Components.MotionEditor import MotionEditor
 
-# Core
-from .Core import (
-    AudioPlayer,
-    Audio,
-    Physics,
-)
+# Core classes
+from .Core import Physics
 from .Entity import Entity
-
-# IK classes
-from .IK.FABRIK import FABRIK
 
 # Import classes
 from .Import.GLBImporter import GLB
@@ -87,14 +83,12 @@ __all__ = [
     "IK",
     "Import",
     "Components",
-    "Core",
     # Core
     "Physics",
-    "AudioPlayer",
-    "Audio",
     # Animation
     "Motion",
     "Hierarchy",
+    "Skeleton",
     "TimeSeries",
     "Module",
     "RootModule",
@@ -102,16 +96,12 @@ __all__ = [
     "MirrorModule",
     "ContactModule",
     "GuidanceModule",
-    "AudioModule",
     "PID",
-    "TrackingModule",
     # Components
     "Component",
     "Actor",
     "MotionEditor",
     "MeshRenderer",
-    # IK
-    "FABRIK",
     # Import
     "GLB",
     # AI
@@ -124,6 +114,8 @@ __all__ = [
     "SequentialMLP",
     "CxM",
     "MultiLayerPerceptron",
+    "PeriodicAutoencoder",
+    "QuantizedAutoencoder",
     "AdamW",
     "CyclicScheduler",
     "CosineAnnealingOptimizer",

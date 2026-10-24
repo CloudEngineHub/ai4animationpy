@@ -1,8 +1,10 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import torch
 from ai4animation.AI.Library import Defaults
 from ai4animation.AI.Library.Layers import FiLMLinearLayer, LinearLayer
 from ai4animation.AI.Library.Statistics import RunningStatistics
+
 
 # [..., X] -> [..., Y] via Feed Forward Network
 class LinearBlock(torch.nn.Module):
@@ -32,6 +34,7 @@ class LinearBlock(torch.nn.Module):
         z = self.L3(z)
         return z
 
+
 # [..., X] -> [..., S, Y] via Time FiLM Embedding with Feed Forward Network
 class SequentialBlock(torch.nn.Module):
     def __init__(
@@ -50,12 +53,8 @@ class SequentialBlock(torch.nn.Module):
         for _ in range(100):
             self.SequenceStatistics.Update(self.timing())
 
-        self.L1 = FiLMLinearLayer(
-            input_size, hidden_size, 1, dropout, activation
-        )
-        self.L2 = FiLMLinearLayer(
-            hidden_size, hidden_size, 1, dropout, activation
-        )
+        self.L1 = FiLMLinearLayer(input_size, hidden_size, 1, dropout, activation)
+        self.L2 = FiLMLinearLayer(hidden_size, hidden_size, 1, dropout, activation)
         self.L3 = FiLMLinearLayer(hidden_size, output_size, 1, dropout, None)
 
     def input_dim(self):
@@ -79,6 +78,7 @@ class SequentialBlock(torch.nn.Module):
         else:
             t = torch.linspace(0.0, 1.0, self.SequenceLength)
         return t.reshape(-1, 1)
+
 
 # [..., Sx, X] -> [..., Sy, Y] via two consecutive Feed Forward Networks
 class SpaceTimeBlock(torch.nn.Module):

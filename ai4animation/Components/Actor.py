@@ -1,23 +1,21 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-"""Skeletal actor component with bone hierarchy, transforms, and visualization."""
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
 
-from typing import List
+"""Skeletal actor component with model, scene entities, and visualization."""
 
-import numpy as np
 from ai4animation import Utility
 from ai4animation.AI4Animation import AI4Animation
 from ai4animation.Animation.Hierarchy import Hierarchy
+from ai4animation.Animation.Skeleton import Skeleton
 from ai4animation.Components.Component import Component
-from ai4animation.Math import Quaternion, Rotation, Tensor, Transform, Vector3
 
 
 class Actor(Component):
     def Start(self, params):
-        self.Hierarchy = next((p for p in params if isinstance(p, Hierarchy)), None)
+        source_hierarchy = next((p for p in params if isinstance(p, Hierarchy)), None)
         self.ModelPath = next((p for p in params if isinstance(p, str)), None)
         bone_names = next((p for p in params if isinstance(p, (list, tuple))), None)
 
-        if self.Hierarchy is None and self.ModelPath is None:
+        if source_hierarchy is None and self.ModelPath is None:
             print("Error: Actor requires at least a Hierarchy or a model path.")
             return
 
@@ -25,309 +23,131 @@ class Actor(Component):
         if self.ModelPath is not None:
             if self.ModelPath.lower().endswith(".fbx"):
                 from ai4animation.Import.FBXImporter import FBX
+
                 self.Model = FBX.Create(self.ModelPath)
             else:
                 from ai4animation.Import.GLBImporter import GLB
+
                 self.Model = GLB.Create(self.ModelPath)
 
-        if self.Hierarchy is not None:
-            names, parents, transforms = self.Hierarchy.BoneNames, self.Hierarchy.ParentNames, None
+        if source_hierarchy is not None:
+            names, parents, transforms = (
+                source_hierarchy.BoneNames,
+                source_hierarchy.ParentNames,
+                None,
+            )
         else:
-            names, parents, transforms = self.Model.JointNames, self.Model.JointParents, self.Model.JointMatrices
+            names, parents, transforms = (
+                self.Model.JointNames,
+                self.Model.JointParents,
+                self.Model.JointMatrices,
+            )
 
-        self.BoneNames = list(bone_names) if bone_names is not None else names
-        self.Entities  = self.CreateEntities(names, parents, transforms)
+        self.Entities = self.CreateEntities(names, parents, transforms)
 
-        if self.Hierarchy is not None and self.Model is not None:
+        if source_hierarchy is not None and self.Model is not None:
             self.AssignZeroPose(self.Model.JointNames, self.Model.JointMatrices)
 
-        #Create bones
-        self.Bones = []
-        self.NameToBoneMap = {}
-        for i, name in enumerate(self.BoneNames):
-            entity = self.NameToEntity.setdefault(
-                name,
-                AI4Animation.Scene.AddEntity(name, position=None, rotation=None, parent=self.Entity)
+        selected = list(bone_names) if bone_names is not None else list(names)
+
+        missing = [n for n in selected if n not in self.NameToEntity]
+        if missing:
+            raise ValueError(
+                f"Actor: selected bones {missing} absent from scene entities "
+                f"(full namespace has {len(self.NameToEntity)} entities)."
             )
-            bone = self.Bone(self, i, entity)
-            self.Bones.append(bone)
-            self.NameToBoneMap[name] = bone
 
-        for bone in self.Bones:
-            parent_entity = bone.Entity.FindParent(self.BoneNames)
-            if parent_entity is not None and (parent_bone := self.NameToBoneMap.get(parent_entity.Name)):
-                bone.SetParent(parent_bone)
+        hierarchy = (
+            source_hierarchy
+            if source_hierarchy is not None
+            else Hierarchy(names, parents)
+        )
 
-        #Initialize
-        self.Root = self.Entity.GetTransform()
-        self.Transforms = AI4Animation.Scene.GetTransforms(self.GetBoneEntityIndices())
-        self.Velocities = Vector3.Zero(self.GetBoneCount())
-        for bone in self.Bones:
-            bone.ComputeZeroTransform()
+        self.Skeleton = Skeleton(
+            Hierarchy(selected, hierarchy.FindParentNames(selected, selected)),
+            root=self.Entity.GetTransform(),
+            transforms=self.GetSceneTransforms(selected),
+        )
 
     def Update(self):
         pass
 
     def CreateCopy(self, name=None):
-        entity = AI4Animation.Scene.AddEntity(self.Entity.Name if name is None else name)
-        args = [a for a in [self.Hierarchy, self.ModelPath, self.BoneNames] if a is not None]
-        return entity.AddComponent(Actor, *args)
-
-    def GetBone(self, name):
-        bone = self.NameToBoneMap.get(name)
-        if bone is None:
-            print(f"Bone with name '{name}' could not be found.")
-        return bone
-
-    def PrintSuccessors(self, bone=None, indent=""):
-        if bone is None:
-            self.PrintSuccessors(self.Bones[0])
-            return
-        print(
-            indent,
-            bone.Entity.Name,
-            "->",
-            [self.Bones[b].Entity.Name for b in bone.Successors],
+        entity = AI4Animation.Scene.AddEntity(
+            self.Entity.Name if name is None else name
         )
-        for c in bone.Children:
-            self.PrintSuccessors(c, indent + "  ")
+        if self.ModelPath is not None:
+            return entity.AddComponent(
+                Actor, self.ModelPath, self.Skeleton.Hierarchy.BoneNames
+            )
+        return entity.AddComponent(Actor, self.Skeleton.Hierarchy)
 
-    def GetBoneNames(self):
-        return list(self.NameToBoneMap.keys())
+    def GetBoneEntity(self, name):
+        entity = self.NameToEntity.get(name)
+        if entity is None:
+            print(f"Entity with name '{name}' could not be found.")
+        return entity
 
-    def GetParentNames(self):
-        return [
-            bone.Parent.Entity.Name if bone.Parent is not None else None
-            for bone in self.Bones
-        ]
+    def GetBoneEntities(self, names=None):
+        if names is None:
+            names = list(self.Skeleton.Hierarchy.BoneNames)
+        return [self.NameToEntity[name] for name in names]
 
-    def HasBone(self, name):
-        return name in self.NameToBoneMap
-
-    def GetBoneCount(self):
-        return len(self.Bones)
-
-    def GenericEvaluator(self, args, fn_default, fn_names, fn_bones, fn_indices):
-        if args is None:
-            return fn_default()
-        if isinstance(args, list):
-            if isinstance(args[0], str):
-                return fn_names()
-            if isinstance(args[0], self.Bone):
-                return fn_bones()
-            if isinstance(args[0], int):
-                return fn_indices()
-        print("Invalid generic type:", type(args))
-        return None
-
-    def GetBones(self, names_or_indices=None):
-        return self.GenericEvaluator(
-            args=names_or_indices,
-            fn_default=lambda: self.Bones,
-            fn_names=lambda: [
-                self.GetBone(name)
-                for name in names_or_indices
-                if name in self.NameToBoneMap
-            ],
-            fn_bones=lambda: names_or_indices,
-            fn_indices=lambda: self.Bones[names_or_indices],
-        )
-
-    def GetBoneIndices(self, names_or_bones=None):
-        return self.GenericEvaluator(
-            args=names_or_bones,
-            fn_default=lambda: [item.Index for item in self.Bones],
-            fn_names=lambda: [self.GetBone(item).Index for item in names_or_bones],
-            fn_bones=lambda: [item.Index for item in names_or_bones],
-            fn_indices=lambda: names_or_bones,
-        )
-
-    def GetParentIndices(self, names_or_bones=None):
-        return self.GenericEvaluator(
-            args=names_or_bones,
-            fn_default=lambda: [item.GetParentIndex() for item in self.Bones],
-            fn_names=lambda: [
-                self.GetBone(item).GetParentIndex() for item in names_or_bones
-            ],
-            fn_bones=lambda: [item.GetParentIndex() for item in names_or_bones],
-            fn_indices=lambda: [item.GetParentIndex() for item in names_or_bones],
-        )
-
-    def GetBoneEntityIndices(self, names_or_bones=None):
-        return self.GenericEvaluator(
-            args=names_or_bones,
-            fn_default=lambda: [item.Entity.Index for item in self.Bones],
-            fn_names=lambda: [
-                self.GetBone(item).Entity.Index for item in names_or_bones
-            ],
-            fn_bones=lambda: [item.Entity.Index for item in names_or_bones],
-            fn_indices=lambda: names_or_bones,
-        )
-
-    def GenericTensorOperation(self, args, values, op):
-        return self.GenericEvaluator(
-            args=args,
-            fn_default=lambda: op(values),
-            fn_names=lambda: op(values[self.GetBoneIndices(args)]),
-            fn_bones=lambda: op(values[self.GetBoneIndices(args)]),
-            fn_indices=lambda: op(values[args]),
-        )
-
-    def GetSceneTransforms(self):
-        return AI4Animation.Scene.GetTransforms(self.Entities)
+    def GetBoneEntityIndices(self, names=None):
+        if names is None:
+            names = list(self.Skeleton.Hierarchy.BoneNames)
+        return [self.NameToEntity[name].Index for name in names]
 
     def GetSceneBoneNames(self):
         return [entity.Name for entity in self.Entities]
 
     def GetSceneParentNames(self):
-        return [entity.Parent.Name if entity.Parent is not self.Entity else None for entity in self.Entities]
+        return [
+            entity.Parent.Name if entity.Parent is not self.Entity else None
+            for entity in self.Entities
+        ]
 
-    def SetTransforms(self, values, bones=None):
-        Transform.SetTransform(
-            self.Transforms,
-            values,
-            None if bones is None else self.GetBoneIndices(bones),
+    def SetSceneTransforms(self, values, names=None):
+        indices = (
+            self.GetBoneEntityIndices(names)
+            if names is not None
+            else [entity.Index for entity in self.Entities]
         )
+        AI4Animation.Scene.Transforms[indices] = values
 
-    def GetTransforms(self, names_or_bones_or_indices=None):
-        return self.GenericTensorOperation(
-            names_or_bones_or_indices, self.Transforms, Transform.GetTransform
+    def GetSceneTransforms(self, names=None):
+        indices = (
+            self.GetBoneEntityIndices(names)
+            if names is not None
+            else [entity.Index for entity in self.Entities]
         )
+        return AI4Animation.Scene.Transforms[indices]
 
-    def SetPositionsAndRotations(self, positions, rotations, bones=None):
-        self.SetTransforms(Transform.TR(positions, rotations), bones)
+    def SetScale(self, value, fk=True):
+        self.Entity.SetScale(value, fk=fk)
 
-    def SetPositions(self, values, bones=None):
-        Transform.SetPosition(
-            self.Transforms,
-            values,
-            None if bones is None else self.GetBoneIndices(bones),
-        )
-
-    def GetPositions(self, names_or_bones_or_indices=None):
-        return self.GenericTensorOperation(
-            names_or_bones_or_indices, self.Transforms, Transform.GetPosition
-        )
-
-    def SetRotations(self, values, bones=None):
-        Transform.SetRotation(
-            self.Transforms,
-            values,
-            None if bones is None else self.GetBoneIndices(bones),
-        )
-
-    def GetRotations(self, names_or_bones_or_indices=None):
-        return self.GenericTensorOperation(
-            names_or_bones_or_indices, self.Transforms, Transform.GetRotation
-        )
-
-    def SetVelocities(self, values, bones=None):
-        Vector3.SetVector(
-            self.Velocities,
-            values,
-            None if bones is None else self.GetBoneIndices(bones),
-        )
-
-    def GetVelocities(self, names_or_bones_or_indices=None):
-        return self.GenericTensorOperation(
-            names_or_bones_or_indices, self.Velocities, Vector3.GetVector
-        )
-
-    def GetAlignments(self, names_or_bones_or_indices=None):
-        bones = self.GetPositions(self.GetBoneIndices(names_or_bones_or_indices))
-        parents = self.GetPositions(self.GetParentIndices(names_or_bones_or_indices))
-        return Vector3.Normalize(bones - parents)
-
-    def GetRoot(self):
-        return self.Root
-
-    def SetRoot(self, root):
-        self.Root = root
-
-    def GetRootPosition(self):
-        return Transform.GetPosition(self.Root)
-
-    def GetRootRotation(self):
-        return Transform.GetRotation(self.Root)
-
-    def GetRootDirection(self):
-        return Transform.GetAxisZ(self.Root)
+    def GetScale(self):
+        return self.Entity.GetScale()
 
     def SyncToScene(self, bones=None, root=True):
         if root:
-            self.Entity.SetTransform(self.Root)
-        for bone in self.GetBones(bones):
-            bone.Entity.SetTransform(bone.GetTransform())
+            self.Entity.SetTransform(self.Skeleton.Root)
+        for index in self.Skeleton.Hierarchy.GetBoneIndices(bones):
+            if not self.Skeleton.Hierarchy.IsValidBoneIndex(index):
+                continue
+            entity = self.NameToEntity.get(self.Skeleton.Hierarchy.BoneNames[index])
+            if entity is not None:
+                entity.SetTransform(self.Skeleton.GetTransforms(index))
 
     def SyncFromScene(self, bones=None, root=True):
         if root:
-            self.SetRoot(self.Entity.GetTransform())
-        for bone in self.GetBones(bones):
-            bone.SetTransform(bone.Entity.GetTransform())
-
-    def SearchParent(self, names, parents, current, candidates, result):
-        if len(result) > 0 or current not in names:
-            return
-        idx = names.index(current)
-        if parents[idx] in candidates:
-            result.append(parents[idx])
-        else:
-            self.SearchParent(names, parents, parents[idx], candidates, result)
-
-    def GetDefaultBoneLengths(self, bones=None):
-        return Tensor.Create([bone.GetDefaultLength() for bone in self.GetBones(bones)])
-
-    def GetCurrentBoneLengths(self, bones=None):
-        return Tensor.Create([bone.GetCurrentLength() for bone in self.GetBones(bones)])
-
-    def GetDefaultBodyProportion(self, bones=None):
-        return Tensor.Sum(self.GetDefaultBoneLengths(bones))
-
-    def GetCurrentBodyProportion(self, bones=None):
-        return Tensor.Sum(self.GetCurrentBoneLengths(bones))
-
-    def RestoreBoneLengths(self, bones=None):
-        bones = self.GetBones(bones)
-        parents = self.GetParentIndices(bones)
-        children = self.GetBoneIndices(bones)
-        a = self.GetPositions(parents)
-        b = self.GetPositions(children)
-        c = self.GetDefaultBoneLengths()[children].reshape(-1, 1)
-        d = a + c * Vector3.Normalize(b - a)
-        self.SetPositions(d, children)
-
-    def SetBoneLengths(self, values, bones=None):
-        bones = self.GetBones(bones)
-        parents = self.GetParentIndices(bones)
-        children = self.GetBoneIndices(bones)
-
-        a = self.GetPositions(parents)
-        b = self.GetPositions(children)
-        c = values.reshape(-1, 1)
-        d = a + c * Vector3.Normalize(b - a)
-        self.SetPositions(d, children)
-
-    def RestoreBoneAlignments(self, bones=None):
-        bones = self.GetBones(bones)
-        for bone in bones:
-            bone.RestoreAlignment()
-
-    def GetChain(source: "Actor.Bone", target: "Actor.Bone") -> List["Actor.Bone"]:
-        chain = []
-        pivot = target
-        chain.append(pivot)
-
-        while pivot != source:
-            if pivot.Parent is None:
-                print(
-                    f"Chain from {source.Entity.Name} to {target.Entity.Name} could not be found."
-                )
-                return []
-            else:
-                pivot = pivot.Parent
-                chain.append(pivot)
-        chain.reverse()
-        return chain
+            self.Skeleton.SetRoot(self.Entity.GetTransform())
+        for index in self.Skeleton.Hierarchy.GetBoneIndices(bones):
+            if not self.Skeleton.Hierarchy.IsValidBoneIndex(index):
+                continue
+            entity = self.NameToEntity.get(self.Skeleton.Hierarchy.BoneNames[index])
+            if entity is not None:
+                self.Skeleton.SetTransforms(entity.GetTransform(), index)
 
     def AssignZeroPose(self, names, Transforms, entity=None):
         if entity is None:
@@ -365,8 +185,10 @@ class Actor(Component):
         self.Entity.DrawHandle()
 
     def DrawHandles(self):
-        for bone in self.Bones:
-            bone.DrawHandle()
+        for index in range(self.Skeleton.Hierarchy.BoneCount):
+            entity = self.NameToEntity.get(self.Skeleton.Hierarchy.BoneNames[index])
+            if entity is not None:
+                entity.DrawHandle()
 
     def ShowMesh(self, value):
         if self.SkinnedMesh is None:
@@ -390,7 +212,9 @@ class Actor(Component):
         self.Button_Mesh = None
 
         if self.Model is not None:
-            self.SkinnedMesh = AI4Animation.Standalone.CreateSkinnedMesh(self, self.Model)
+            self.SkinnedMesh = AI4Animation.Standalone.CreateSkinnedMesh(
+                self, self.Model
+            )
 
         self.Canvas = AI4Animation.GUI.Canvas("Actor", 0.01, 0.3, 0.125, 0.25)
         tuples = [
@@ -400,18 +224,26 @@ class Actor(Component):
         ]
         if self.Model is not None:
             tuples.append(("Button_Mesh", "Show Mesh"))
-        tuples.extend([
-            ("Button_Labels", "Show Labels"),
-            ("Button_Hierarchy", "Show Hierarchy"),
-        ])
+        tuples.extend(
+            [
+                ("Button_Labels", "Show Labels"),
+                ("Button_Hierarchy", "Show Hierarchy"),
+            ]
+        )
 
         for i, (button, text) in enumerate(tuples):
             setattr(
                 self,
                 button,
                 AI4Animation.GUI.Button(
-                    text, 0.05, 0.15 + i / (len(tuples) + 1), 0.9, 0.65 / len(tuples),
-                    False, True, self.Canvas,
+                    text,
+                    0.05,
+                    0.15 + i / (len(tuples) + 1),
+                    0.9,
+                    0.65 / len(tuples),
+                    False,
+                    True,
+                    self.Canvas,
                 ),
             )
 
@@ -421,12 +253,12 @@ class Actor(Component):
     def Draw(self):
         boneSize = 0.0175
         if self.Button_Root.Active:
-            AI4Animation.Draw.Transform(self.Root, 0.5)
+            AI4Animation.Draw.Transform(self.Skeleton.Root, 0.5)
         if self.Button_Skeleton.Active:
-            AI4Animation.Draw.Transform(self.Transforms, 0.25)
+            AI4Animation.Draw.Transform(self.Skeleton.Transforms, 0.25)
             AI4Animation.Draw.Cylinder(
-                self.GetPositions(self.GetParentIndices()),
-                self.GetPositions(self.GetBoneIndices()),
+                self.Skeleton.GetPositions(self.Skeleton.Hierarchy.GetParentIndices()),
+                self.Skeleton.GetPositions(self.Skeleton.Hierarchy.GetBoneIndices()),
                 boneSize,
                 0.0,
                 10,
@@ -434,8 +266,8 @@ class Actor(Component):
             )
         if self.Button_Velocities.Active:
             AI4Animation.Draw.Vector(
-                self.GetPositions(),
-                self.Velocities,
+                self.Skeleton.GetPositions(),
+                self.Skeleton.Velocities,
                 boneSize,
                 Utility.Opacity(AI4Animation.Color.BLUE, 0.5),
             )
@@ -454,185 +286,11 @@ class Actor(Component):
 
         if self.Button_Labels.Active:
             AI4Animation.Draw.Text3D(
-                self.GetBoneNames(), self.GetPositions(), 0.01, AI4Animation.Color.BLACK
+                list(self.Skeleton.Hierarchy.BoneNames),
+                self.Skeleton.GetPositions(),
+                0.01,
+                AI4Animation.Color.BLACK,
             )
 
         if self.Button_Mesh is not None and self.Button_Mesh.IsPressed():
             self.ToggleMesh()
-
-    class Bone:
-        def __init__(self, actor, index, entity):
-            self.Actor = actor
-            self.Index = index
-            self.Entity = entity
-            self.Parent = None
-            self.Children = []
-            self.Successors = []
-            self.ZeroTransform = Transform.Identity()
-
-        def GetName(self):
-            return self.Entity.Name
-
-        def SetTransform(self, value, FK=False):
-            if FK:
-                tmp = Transform.TransformationTo(
-                    self.Actor.Transforms[self.Successors], self.GetTransform()
-                )
-                self.SetTransform(value)
-                self.Actor.Transforms[self.Successors] = Transform.TransformationFrom(
-                    tmp, self.GetTransform()
-                )
-            else:
-                self.Actor.Transforms[self.Index] = value
-
-        def GetTransform(self):
-            return Transform.GetTransform(self.Actor.Transforms, self.Index)
-
-        def SetPositionAndRotation(self, position, rotation, FK=False):
-            if FK:
-                tmp = Transform.TransformationTo(
-                    self.Actor.Transforms[self.Successors], self.GetTransform()
-                )
-                self.SetPosition(position)
-                self.SetRotation(rotation)
-                self.Actor.Transforms[self.Successors] = Transform.TransformationFrom(
-                    tmp, self.GetTransform()
-                )
-            else:
-                self.SetPosition(position)
-                self.SetRotation(rotation)
-
-        def SetPosition(self, value, FK=False):
-            if FK:
-                tmp = Transform.TransformationTo(
-                    self.Actor.Transforms[self.Successors], self.GetTransform()
-                )
-                self.SetPosition(value)
-                self.Actor.Transforms[self.Successors] = Transform.TransformationFrom(
-                    tmp, self.GetTransform()
-                )
-            else:
-                Transform.SetPosition(self.Actor.Transforms, value, self.Index)
-
-        def GetPosition(self):
-            return Transform.GetPosition(self.Actor.Transforms, self.Index)
-
-        def SetRotation(self, value, FK=False):
-            if FK:
-                tmp = Transform.TransformationTo(
-                    self.Actor.Transforms[self.Successors], self.GetTransform()
-                )
-                self.SetRotation(value)
-                self.Actor.Transforms[self.Successors] = Transform.TransformationFrom(
-                    tmp, self.GetTransform()
-                )
-            else:
-                self.Actor.Transforms[self.Index, :3, :3] = value
-                # Transform.SetRotation(self.Actor.Transforms, value, self.Index)
-
-        def GetRotation(self):
-            return Transform.GetRotation(self.Actor.Transforms, self.Index)
-
-        def SetLocalRotation(self, value, FK=False):
-            if self.Parent is None:
-                self.SetRotation(value, FK)
-            else:
-                global_rotation = Rotation.RotationFrom(
-                    value, self.Parent.GetTransform()
-                )
-                self.SetRotation(global_rotation, FK)
-
-        def GetLocalRotation(self):
-            if self.Parent is None:
-                return self.GetRotation()
-            return Rotation.RotationTo(self.GetRotation(), self.Parent.GetTransform())
-
-        def SetVelocity(self, value):
-            Vector3.SetVector(self.Actor.Velocities, value, self.Index)
-
-        def GetVelocity(self):
-            return Vector3.GetVector(self.Actor.Velocities, self.Index)
-
-        def ComputeZeroTransform(self):
-            if self.Parent is None:
-                self.ZeroTransform = Transform.Identity()
-                return
-
-            try:
-                self.ZeroTransform = Transform.TransformationTo(
-                    self.GetTransform(), self.Parent.GetTransform()
-                )
-            except np.linalg.LinAlgError as e:
-                # Some models (especially GLB exports) may introduce singular or
-                # degenerate parent transforms (e.g. zero scale), which makes the
-                # inverse undefined. In that case we fall back to identity.
-                print(
-                    f"Warning: failed to compute zero pose for bone '{self.Entity.Name}' due to {type(e).__name__}: {e}"
-                )
-                self.ZeroTransform = Transform.Identity()
-
-        def GetZeroLocalRotation(self):
-            return Transform.GetRotation(self.ZeroTransform)
-
-        def GetCurrentLength(self):
-            return (
-                0.0
-                if self.Parent is None
-                else Vector3.Distance(self.Parent.GetPosition(), self.GetPosition())[0]
-            )
-
-        def GetDefaultLength(self):
-            return Vector3.Length(Transform.GetPosition(self.ZeroTransform))[0]
-
-        def SetLength(self, value):
-            if self.Parent is not None:
-                current = self.GetPosition()
-                parent = self.Parent.GetPosition()
-                self.SetPosition(parent + value * Vector3.Normalize(current - parent))
-
-        def RestoreLength(self):
-            self.SetLength(self.GetDefaultLength())
-
-        def RestoreAlignment(self):
-            if len(self.Children) == 1:
-                self.SetRotation(
-                    self.ComputeAlignment(
-                        self.GetTransform(),
-                        Vector3.PositionFrom(
-                            Transform.GetPosition(self.Children[0].ZeroTransform),
-                            self.GetTransform(),
-                        ),
-                        self.Children[0].GetPosition(),
-                    )
-                )
-
-        def ComputeAlignment(self, source, from_pos, to_pos):
-            return Rotation.Multiply(
-                Quaternion.ToMatrix(
-                    Quaternion.FromTo(
-                        from_pos - Transform.GetPosition(source),
-                        to_pos - Transform.GetPosition(source),
-                    )
-                ),
-                Transform.GetRotation(source),
-            )
-
-        def SetParent(self, parent):
-            if self.Parent is not None:
-                self.Parent.Children.remove(self)
-            if parent is not None:
-                parent.Children.append(self)
-            self.Parent = parent
-            if self.Parent is not None:
-                self.Parent.AddSuccessor(self)
-
-        def GetParentIndex(self):
-            return self.Index if self.Parent is None else self.Parent.Index
-
-        def AddSuccessor(self, bone):
-            self.Successors.append(bone.Index)
-            if self.Parent is not None:
-                self.Parent.AddSuccessor(bone)
-
-        def DrawHandle(self):
-            self.Entity.DrawHandle()

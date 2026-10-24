@@ -1,3 +1,5 @@
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 from ai4animation.AI.Optimizers.AdamWR.AdamW import AdamW
 from ai4animation.AI.Optimizers.AdamWR.CyclicScheduler import CyclicScheduler
 

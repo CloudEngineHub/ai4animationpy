@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Shared helper functions for file I/O, serialization, color manipulation, and dynamic module loading."""
 
 import importlib.util

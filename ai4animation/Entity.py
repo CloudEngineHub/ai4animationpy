@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 """Scene entity with hierarchical transforms, components, and parent-child relationships."""
 
 from ai4animation import AI4Animation
@@ -40,45 +41,72 @@ class Entity:
             c.GUI()
 
     def SetTransform(self, value, fk=True):
-        delta = Transform.TransformationTo(
-            AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
-            self.GetTransform(),
-        )
+        if fk:
+            delta = Transform.TransformationTo(
+                AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
+                self.GetTransform(),
+            )
         AI4Animation.AI4Animation.Scene.Transforms[self.Index] = value
-        AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
-            Transform.TransformationFrom(delta, self.GetTransform())
-        )
+        if fk:
+            AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
+                Transform.TransformationFrom(delta, self.GetTransform())
+            )
 
     def SetPosition(self, value, fk=True):
-        delta = Transform.TransformationTo(
-            AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
-            self.GetTransform(),
-        )
+        if fk:
+            delta = Transform.TransformationTo(
+                AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
+                self.GetTransform(),
+            )
         AI4Animation.AI4Animation.Scene.Transforms[self.Index, :3, 3] = value
-        AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
-            Transform.TransformationFrom(delta, self.GetTransform())
-        )
+        if fk:
+            AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
+                Transform.TransformationFrom(delta, self.GetTransform())
+            )
 
     def SetRotation(self, value, fk=True):
-        delta = Transform.TransformationTo(
-            AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
-            self.GetTransform(),
-        )
+        if fk:
+            delta = Transform.TransformationTo(
+                AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
+                self.GetTransform(),
+            )
         AI4Animation.AI4Animation.Scene.Transforms[self.Index, :3, :3] = value
-        AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
-            Transform.TransformationFrom(delta, self.GetTransform())
-        )
+        if fk:
+            AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
+                Transform.TransformationFrom(delta, self.GetTransform())
+            )
 
     def SetPositionAndRotation(self, position, rotation, fk=True):
-        delta = Transform.TransformationTo(
-            AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
-            self.GetTransform(),
-        )
+        if fk:
+            delta = Transform.TransformationTo(
+                AI4Animation.AI4Animation.Scene.Transforms[self.Successors],
+                self.GetTransform(),
+            )
         AI4Animation.AI4Animation.Scene.Transforms[self.Index, :3, 3] = position
         AI4Animation.AI4Animation.Scene.Transforms[self.Index, :3, :3] = rotation
-        AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
-            Transform.TransformationFrom(delta, self.GetTransform())
-        )
+        if fk:
+            AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = (
+                Transform.TransformationFrom(delta, self.GetTransform())
+            )
+
+    def SetScale(self, value, fk=True):
+        delta = value / self.GetScale()
+        AI4Animation.AI4Animation.Scene.Scales[self.Index] *= delta
+        AI4Animation.AI4Animation.Scene.Scales[self.Successors] *= delta
+        if fk:
+            AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = Transform.TR(
+                self.GetPosition()
+                + delta
+                * (
+                    Transform.GetPosition(
+                        AI4Animation.AI4Animation.Scene.Transforms[self.Successors]
+                    )
+                    - self.GetPosition()
+                ),
+                Transform.GetRotation(
+                    AI4Animation.AI4Animation.Scene.Transforms[self.Successors]
+                ),
+            )
 
     def GetTransform(self):
         return AI4Animation.AI4Animation.Scene.Transforms[self.Index]
@@ -88,24 +116,6 @@ class Entity:
 
     def GetRotation(self):
         return AI4Animation.AI4Animation.Scene.Transforms[self.Index, :3, :3]
-
-    def SetScale(self, value):
-        delta = value / self.GetScale()
-        AI4Animation.AI4Animation.Scene.Scales[self.Index] *= delta
-        AI4Animation.AI4Animation.Scene.Scales[self.Successors] *= delta
-        AI4Animation.AI4Animation.Scene.Transforms[self.Successors] = Transform.TR(
-            self.GetPosition()
-            + delta
-            * (
-                Transform.GetPosition(
-                    AI4Animation.AI4Animation.Scene.Transforms[self.Successors]
-                )
-                - self.GetPosition()
-            ),
-            Transform.GetRotation(
-                AI4Animation.AI4Animation.Scene.Transforms[self.Successors]
-            ),
-        )
 
     def GetScale(self):
         return AI4Animation.AI4Animation.Scene.Scales[self.Index]

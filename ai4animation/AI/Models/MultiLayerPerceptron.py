@@ -1,4 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
+import torch
 import torch.nn as nn
 from ai4animation.AI.Library import Defaults, Losses
 from ai4animation.AI.Library.Blocks import LinearBlock
@@ -42,6 +44,7 @@ class Model(nn.Module):
 
         input = self.InputStatistics.Normalize(input)
         output = self.OutputStatistics.Normalize(output)
+
         prediction = self.Layers(input)
 
         loss = Losses.MSE(prediction, output)

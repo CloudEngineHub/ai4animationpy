@@ -1,6 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
 
 from ai4animation import (
@@ -12,14 +12,16 @@ from ai4animation import (
     MotionEditor,
     MotionModule,
     RootModule,
+    Utility,
     Vector3,
 )
 
 SCRIPT_DIR = Path(__file__).parent
 ASSETS_PATH = str(SCRIPT_DIR.parent / "_ASSETS_/Cranberry")
 
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
 
 
 class Program:
@@ -44,10 +46,10 @@ class Program:
                     lambda x: ContactModule(
                         x,
                         [
-                            (Definitions.LeftAnkleName, 0.25),
-                            (Definitions.LeftBallName, 0.25),
-                            (Definitions.RightAnkleName, 0.25),
-                            (Definitions.RightBallName, 0.25),
+                            (Definitions.LeftAnkleName, 0.25, 0.02),
+                            (Definitions.LeftBallName, 0.25, 0.01),
+                            (Definitions.RightAnkleName, 0.25, 0.02),
+                            (Definitions.RightBallName, 0.25, 0.01),
                         ],
                     ),
                     lambda x: GuidanceModule(x),

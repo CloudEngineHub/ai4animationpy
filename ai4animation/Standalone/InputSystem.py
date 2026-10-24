@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import glob
 import os
 import struct
@@ -290,6 +291,15 @@ def GetCurrentKey():
 
 def GetKey(id):
     return rl.IsKeyPressed(id)
+
+
+def GetKeyDown(id):
+    return rl.IsKeyDown(id)
+
+
+def IsSpaceDown():
+    return GetKeyDown(rl.KEY_SPACE)
+
 
 def GetWASDQE():
     input = [0, 0, 0]

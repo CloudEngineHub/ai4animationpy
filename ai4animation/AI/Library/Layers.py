@@ -1,9 +1,10 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
 from ai4animation.AI.Library import Defaults, Manifolds
+from einops import rearrange
 
 
 class LinearLayer(torch.nn.Module):
@@ -158,9 +159,9 @@ class QuantizationLayer(nn.Module):
         self,
         num_embed,
         embed_dim,
-        beta,
+        beta=0.25,
         distance="cos",
-        anchor="probrandom",
+        anchor="closest",
         first_batch=False,
         contras_loss=False,
     ):

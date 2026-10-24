@@ -1,21 +1,35 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-from ai4animation import FABRIK, Rotation, Vector3
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
+from typing import TYPE_CHECKING
+
+from ai4animation import Rotation, Vector3
+
+if TYPE_CHECKING:
+    from ai4animation.IK.FABRIK import FABRIK
 
 
 class LegIK:
-    def __init__(self, ankleIK: FABRIK, ballIK: FABRIK):
+    def __init__(self, ankleIK: "FABRIK", ballIK: "FABRIK"):
         self.AnkleIK = ankleIK
         self.BallIK = ballIK
-        ankle_pos = ankleIK.LastBone().GetPosition().copy()
-        ball_pos = ballIK.LastBone().GetPosition().copy()
+        ankle_pos = ankleIK.Skeleton.GetPositions(ankleIK.LastBoneIndex()).copy()
+        ball_pos = ballIK.Skeleton.GetPositions(ballIK.LastBoneIndex()).copy()
         self.AnkleBaseline: float = ankle_pos[..., 1]
         self.BallBaseline: float = ball_pos[..., 1]
         self.AnkleBallDistance: float = Vector3.Distance(ankle_pos, ball_pos)
 
-        self.AnkleTargetPosition = self.AnkleIK.LastBone().GetPosition()
-        self.AnkleTargetRotation = self.AnkleIK.LastBone().GetRotation()
-        self.BallTargetPosition = self.BallIK.LastBone().GetPosition()
-        self.BallTargetRotation = self.BallIK.LastBone().GetRotation()
+        self.AnkleTargetPosition = self.AnkleIK.Skeleton.GetPositions(
+            self.AnkleIK.LastBoneIndex()
+        )
+        self.AnkleTargetRotation = self.AnkleIK.Skeleton.GetRotations(
+            self.AnkleIK.LastBoneIndex()
+        )
+        self.BallTargetPosition = self.BallIK.Skeleton.GetPositions(
+            self.BallIK.LastBoneIndex()
+        )
+        self.BallTargetRotation = self.BallIK.Skeleton.GetRotations(
+            self.BallIK.LastBoneIndex()
+        )
 
     def Solve(
         self,
@@ -47,11 +61,13 @@ class LegIK:
         )
 
         self.AnkleTargetPosition = Vector3.Lerp(
-            self.AnkleIK.LastBone().GetPosition(), locked_pos, weight
+            self.AnkleIK.Skeleton.GetPositions(self.AnkleIK.LastBoneIndex()),
+            locked_pos,
+            weight,
         )
 
         self.AnkleTargetRotation = Rotation.Interpolate(
-            self.AnkleIK.LastBone().GetRotation(),
+            self.AnkleIK.Skeleton.GetRotations(self.AnkleIK.LastBoneIndex()),
             self.AnkleTargetRotation,
             0.5 * weight,
         )
@@ -74,11 +90,12 @@ class LegIK:
         )
 
         self.BallTargetPosition = Vector3.Lerp(
-            self.BallIK.LastBone().GetPosition(), locked_pos, weight
+            self.BallIK.Skeleton.GetPositions(self.BallIK.LastBoneIndex()),
+            locked_pos,
+            weight,
         )
 
-        # Enforce ankle-ball distance constraint horizontally to preserve
-        # the grounded height computed above.
+        # Enforce ankle-ball distance horizontally while preserving grounded height.
         grounded_height = self.BallTargetPosition[..., 1]
         direction = self.BallTargetPosition - self.AnkleTargetPosition
         direction[..., 1] = 0.0
@@ -95,7 +112,7 @@ class LegIK:
         self.BallTargetPosition[..., 1] = grounded_height
 
         self.BallTargetRotation = Rotation.Interpolate(
-            self.BallIK.LastBone().GetRotation(),
+            self.BallIK.Skeleton.GetRotations(self.BallIK.LastBoneIndex()),
             self.BallTargetRotation,
             0.5 * weight,
         )

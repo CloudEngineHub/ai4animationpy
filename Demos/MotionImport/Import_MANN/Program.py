@@ -1,6 +1,6 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import os
-import sys
 from pathlib import Path
 
 from ai4animation import (
@@ -11,9 +11,10 @@ from ai4animation import (
     MotionEditor,
     MotionModule,
     RootModule,
-    Transform,
-    Vector3,
     Rotation,
+    Transform,
+    Utility,
+    Vector3,
 )
 
 SCRIPT_DIR = Path(__file__).parent
@@ -22,8 +23,9 @@ DATASET_PATH = os.path.join(SCRIPT_DIR, "bvh/NPZ")
 
 ASSETS_PATH = str(SCRIPT_DIR.parent.parent / "_ASSETS_/Quadruped")
 MODEL_PATH = os.path.join(ASSETS_PATH, "Dog.glb")
-sys.path.append(ASSETS_PATH)
-import Definitions
+Definitions = Utility.LoadModule(
+    os.path.join(ASSETS_PATH, "Definitions.py"), "Definitions"
+)
 
 
 class Program:
@@ -52,7 +54,8 @@ class Program:
                     ],
                 ),
                 lambda x: MirrorModule(
-                    x, Vector3.Axis.ZPositive,
+                    x,
+                    Vector3.Axis.ZPositive,
                 ),
             ],
             operation=lambda x: self.CorrectMotion(x),
@@ -70,8 +73,17 @@ class Program:
 
     def CorrectMotion(self, motion):
         motion.Frames = Transform.GetMirror(motion.Frames, Vector3.Axis.XPositive)
-        idx = motion.Hierarchy.GetBoneIndex([Definitions.HeadName, Definitions.LeftShoulderName, Definitions.RightShoulderName])
-        motion.Frames[:, idx] = Transform.Multiply(motion.Frames[:, idx], Transform.R(Rotation.Euler(90, 0, 0)))
+        idx = motion.Hierarchy.GetBoneIndices(
+            [
+                Definitions.HeadName,
+                Definitions.LeftShoulderName,
+                Definitions.RightShoulderName,
+            ]
+        )
+        motion.Frames[:, idx] = Transform.Multiply(
+            motion.Frames[:, idx], Transform.R(Rotation.Euler(90, 0, 0))
+        )
+
 
 def main():
     AI4Animation(Program())

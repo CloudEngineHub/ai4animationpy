@@ -1,4 +1,5 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
+# (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+
 import threading
 from enum import Enum
 
@@ -15,6 +16,7 @@ MAX_NOISE = 0.025
 MIN_POWER = 0.0
 MAX_POWER = 1.0
 MAX_SHIFT = 0.5
+
 
 class RootModule(Module):
     class Topology(Enum):
@@ -47,7 +49,7 @@ class RootModule(Module):
 
         self.RootReference = reference
 
-        self.BoneIndices = motion.GetBoneIndices(
+        self.BoneIndices = motion.Hierarchy.GetBoneIndices(
             [hip, left_hip, right_hip, left_shoulder, right_shoulder, neck]
         )
         (
@@ -79,8 +81,12 @@ class RootModule(Module):
         timestamps = timeseries.SimulateTimestamps(timestamp)
         instance = self.Series(
             timeseries,
-            self.GetTransforms(timestamps, mirrored, smoothing, power=power, noise=noise),
-            self.GetVelocities(timestamps, mirrored, smoothing, power=power, noise=noise),
+            self.GetTransforms(
+                timestamps, mirrored, smoothing, power=power, noise=noise
+            ),
+            self.GetVelocities(
+                timestamps, mirrored, smoothing, power=power, noise=noise
+            ),
         )
         return instance
 
@@ -123,7 +129,6 @@ class RootModule(Module):
             directions = Tensor.Gaussian(
                 directions, power=power * bias, axis=axis, keepDim=False
             )
-
             matrices = Transform.TR(positions, Rotation.LookPlanar(directions))
         else:
             with self.Lock:
@@ -136,13 +141,13 @@ class RootModule(Module):
             if self.Motion.Scale != 1.0:
                 matrices = Transform.Scale(matrices, self.Motion.Scale)
         if noise > 0.0:
-            #Position
+            # Position
             delta = noise * np.random.randn(*matrices[..., :3, 3].shape)
             delta[..., 1] = 0.0
             matrices[..., :3, 3] += delta
-            #Rotation
+            # Rotation
             delta = Rotation.RotationY(
-                180*noise*Tensor.RandomUniform(matrices.shape[:-2])
+                180 * noise * Tensor.RandomUniform(matrices.shape[:-2])
             )
             matrices[..., :3, :3] = Rotation.RotationFrom(delta, matrices[..., :3, :3])
         return matrices
@@ -156,7 +161,9 @@ class RootModule(Module):
         noise: float = 0.0,
     ):
         return Transform.GetPosition(
-            self.GetTransforms(timestamps, mirrored, smoothing, power=power, noise=noise)
+            self.GetTransforms(
+                timestamps, mirrored, smoothing, power=power, noise=noise
+            )
         )
 
     def GetRotations(
@@ -168,7 +175,9 @@ class RootModule(Module):
         noise: float = 0.0,
     ):
         return Transform.GetRotation(
-            self.GetTransforms(timestamps, mirrored, smoothing, power=power, noise=noise)
+            self.GetTransforms(
+                timestamps, mirrored, smoothing, power=power, noise=noise
+            )
         )
 
     def GetVelocities(
@@ -187,58 +196,9 @@ class RootModule(Module):
         t_current = Tensor.Clamp(
             timestamps, self.Motion.DeltaTime, self.Motion.TotalTime
         )
-        pos_previous = self.GetPositions(t_previous, mirrored, smoothing, power=power, noise=noise)
-        pos_current = self.GetPositions(t_current, mirrored, smoothing, power=power, noise=noise)
+        pos_previous = self.GetPositions(t_previous, mirrored, smoothing, power, noise)
+        pos_current = self.GetPositions(t_current, mirrored, smoothing, power, noise)
         return (pos_current - pos_previous) / self.Motion.DeltaTime
-
-    def GetDeltaTransforms(
-        self,
-        timestamps=None,
-        mirrored=False,
-        deltaTime=None,
-        smoothing: TimeSeries = None,
-    ):
-        dt = self.Motion.DeltaTime if deltaTime is None else deltaTime
-        timestamps = Tensor.Clamp(
-            Tensor.Concat((timestamps[..., :1] - dt, timestamps), -1),
-            0,
-            self.Motion.TotalTime,
-        )
-        transforms = self.GetTransforms(timestamps, mirrored, smoothing)
-        prev = transforms[..., :-1, :, :]
-        next = transforms[..., 1:, :, :]
-        delta = Transform.TransformationTo(next, prev)
-        return delta
-
-    # Returns (dX, dTheta, dZ) if planar=True
-    # Returns (dX, dY, dZ, dTheta) if planar=False
-    def GetDeltaVectors(
-        self,
-        timestamps=None,
-        mirrored=False,
-        deltaTime=None,
-        smoothing: TimeSeries = None,
-        planar=True,
-    ):
-        if planar:
-            delta = self.GetDeltaTransforms(timestamps, mirrored, deltaTime, smoothing)
-            pos = Transform.GetPosition(delta)
-            rot = Transform.GetRotation(delta)
-            x = pos[..., 0]
-            z = pos[..., 2]
-            y = Vector3.SignedAngle(Vector3.Z, Rotation.GetAxisZ(rot), Vector3.Y)
-            vec = Tensor.Stack((x, y, z), -1)
-            return vec
-        else:
-            delta = self.GetDeltaTransforms(timestamps, mirrored, deltaTime, smoothing)
-            pos = Transform.GetPosition(delta)
-            rot = Transform.GetRotation(delta)
-            x = pos[..., 0]
-            y = pos[..., 1]
-            z = pos[..., 2]
-            w = Vector3.SignedAngle(Vector3.Z, Rotation.GetAxisZ(rot), Vector3.Y)
-            vec = Tensor.Stack((x, y, z, w), -1)
-            return vec
 
     def Compute(self, timestamps, mirrored):
         bone_transformations = self.Motion.GetBoneTransformations(
@@ -301,7 +261,9 @@ class RootModule(Module):
 
     def Callback(self, editor):
         if editor.Actor:
-            editor.Actor.Root = self.GetTransforms(editor.Timestamp, editor.Mirror)
+            editor.Actor.Skeleton.Root = self.GetTransforms(
+                editor.Timestamp, editor.Mirror
+            )
 
     def Standalone(self):
         x = 0.325
@@ -309,29 +271,31 @@ class RootModule(Module):
         w = 0.24
         h = 0.04
 
-        y+=0
+        y += 0
         self.Slider_SmoothWindow = AI4Animation.GUI.Slider(
-            x, y, w/2, h, 0.0, 0.0, MAX_WINDOW, label="Smooth Window"
+            x, y, w / 2, h, 0.0, 0.0, MAX_WINDOW, label="Smooth Window"
         )
         self.Slider_SmoothPower = AI4Animation.GUI.Slider(
-            x+w/2, y, w/2, h, 1.0, MIN_POWER, MAX_POWER, label="Smooth Power"
+            x + w / 2, y, w / 2, h, 1.0, MIN_POWER, MAX_POWER, label="Smooth Power"
         )
         self.Button_SmoothRandomize = AI4Animation.GUI.Button(
-            "Random", x+w,y,0.1,h,False,True
+            "Random", x + w, y, 0.1, h, False, True
         )
-        y+=h
+
+        y += h
         self.Slider_ShiftAmount = AI4Animation.GUI.Slider(
             x, y, w, h, 0.0, 0.0, MAX_SHIFT, label="Shift Amount"
         )
         self.Button_ShiftRandomize = AI4Animation.GUI.Button(
-            "Random", x+w,y,0.1,h,False,True
+            "Random", x + w, y, 0.1, h, False, True
         )
-        y+=h
+
+        y += h
         self.Slider_NoiseAmount = AI4Animation.GUI.Slider(
             x, y, w, h, 0.0, 0.0, MAX_NOISE, label="Noise Amount"
         )
         self.Button_NoiseRandomize = AI4Animation.GUI.Button(
-            "Random", x+w,y,0.1,h,False,True
+            "Random", x + w, y, 0.1, h, False, True
         )
 
     def GUI(self, editor):
@@ -383,7 +347,7 @@ class RootModule(Module):
                 TimeSeries(shift, MAX_SHIFT, editor.TimeSeries.SampleCount),
                 smoothing,
                 power,
-                noise
+                noise,
             ).Draw()
 
     class Series(TimeSeries):
@@ -462,12 +426,6 @@ class RootModule(Module):
         def GetVelocity(self, index):
             return Vector3.GetVector(self.Velocities, index)
 
-        def Increment(self, start, end):
-            """Shift series samples left in [start, end), matching Unity RootModule.Series."""
-            for i in range(start, end):
-                self.Transforms[i] = self.Transforms[i + 1].copy()
-                self.Velocities[i] = self.Velocities[i + 1].copy()
-
         def GetLength(self):
             prev = Transform.GetPosition(self.Transforms)[..., :-1, :]
             next = Transform.GetPosition(self.Transforms)[..., 1:, :]
@@ -484,37 +442,6 @@ class RootModule(Module):
                         pivot + Vector3.Create(horizontal[0], offset[1], horizontal[2]),
                         index,
                     )
-
-        def ControlFromTarget(self, start, goal, strength=1.0):
-            start_position = Transform.GetPosition(start).copy()
-            goal_position = Transform.GetPosition(goal).copy()
-            start_position[..., 1] = 0.0
-            goal_position[..., 1] = 0.0
-
-            delta = goal_position - start_position
-            start_direction = Transform.GetAxisZ(start).copy()
-            start_direction[..., 1] = 0.0
-            if Vector3.Length(delta) != 0.0:
-                goal_direction = delta
-            else:
-                goal_direction = Transform.GetAxisZ(goal).copy()
-                goal_direction[..., 1] = 0.0
-            if Vector3.Length(goal_direction) == 0.0:
-                goal_direction = start_direction
-            if Vector3.Length(start_direction) == 0.0:
-                start_direction = goal_direction
-
-            weight = Tensor.Unsqueeze(Tensor.LinSpace(0.0, 1.0, self.SampleCount), -1)
-            positions = Vector3.Lerp(start_position, goal_position, weight)
-            directions = Vector3.Normalize(
-                Vector3.Lerp(start_direction, goal_direction, weight)
-            )
-            self.Transforms = Transform.TR(positions, Rotation.LookPlanar(directions))
-            self.Velocities = Tensor.Repeat(
-                (strength * delta / max(self.Window, Tensor.EPS)).reshape(1, 3),
-                self.SampleCount,
-                0,
-            )
 
         def Control(
             self,
